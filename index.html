@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>전국 환승요금 길잡이</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#f4f6f9;--card:#fff;--ink:#14181f;--sub:#5d6675;--line:#e2e6ec;
+  --pri:#1f6feb;--pri-ink:#fff;--bus:#2e9d4f;--sub-c:#e0602b;--walk:#8a93a3;--ext:#8b5cf6;
+  --warn:#b7791f;--warn-bg:#fff6e5;--ok-bg:#eaf6ee;--chip:#eef2f7;--me:#fff4d6;
+  --radius:14px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1218;--card:#181c24;--ink:#e8ebf1;--sub:#9aa3b2;--line:#2a303b;
+    --pri:#4c8dff;--chip:#232936;--warn-bg:#2d2414;--ok-bg:#16261c;--me:#3a3214;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1218;--card:#181c24;--ink:#e8ebf1;--sub:#9aa3b2;--line:#2a303b;
+  --pri:#4c8dff;--chip:#232936;--warn-bg:#2d2414;--ok-bg:#16261c;--me:#3a3214;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+  -webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:1000;background:var(--card);border-bottom:1px solid var(--line)}
+.hwrap{max-width:860px;margin:0 auto;padding:10px 16px 0}
+.htop{display:flex;align-items:center;gap:10px;justify-content:space-between}
+h1{font-size:17px;margin:0;letter-spacing:-.3px}
+.agechip{display:flex;align-items:center;gap:6px;background:var(--chip);border-radius:999px;padding:4px 6px 4px 10px;font-size:13px}
+.agechip input{width:54px;border:0;background:var(--card);border-radius:999px;padding:3px 8px;color:var(--ink);font:inherit;text-align:center}
+.agechip b{font-weight:600}
+nav{display:flex;gap:2px;overflow-x:auto;margin-top:8px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;border:0;background:none;color:var(--sub);font:inherit;font-weight:600;padding:8px 12px;border-bottom:3px solid transparent;cursor:pointer}
+nav button.on{color:var(--pri);border-bottom-color:var(--pri)}
+main{max-width:860px;margin:0 auto;padding:14px 16px 80px}
+section{display:none}
+section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.muted{color:var(--sub);font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>*{min-width:0}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--sub);font-weight:600}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+textarea{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pri);outline-offset:-1px}
+button{font:inherit;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 12px;font-weight:600}
+.btn.sm{padding:5px 9px;font-size:13px}
+.btn.primary{background:var(--pri);border-color:var(--pri);color:var(--pri-ink);width:100%;padding:12px;font-size:16px}
+.btn.ghost{background:none;border-color:transparent;color:var(--pri)}
+.btn:disabled{opacity:.5;cursor:default}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--chip);color:var(--sub);vertical-align:middle}
+.badge.est{background:var(--warn-bg);color:var(--warn)}
+.badge.bus{background:color-mix(in srgb,var(--bus) 16%,transparent);color:var(--bus)}
+.badge.subway{background:color-mix(in srgb,var(--sub-c) 16%,transparent);color:var(--sub-c)}
+.badge.walk{background:var(--chip);color:var(--walk)}
+.badge.ext{background:color-mix(in srgb,var(--ext) 16%,transparent);color:var(--ext)}
+/* stops */
+.stop{display:grid;grid-template-columns:62px 1fr auto;gap:8px;align-items:center}
+.stop .lab{font-size:12px;font-weight:700;color:var(--sub)}
+.stop .lab .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.stop input.pname{width:100%}
+.stop .acts{display:flex;gap:4px}
+.leg{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center;margin:6px 0}
+.leg .line{justify-self:center;width:2px;height:28px;background:var(--line)}
+.leg select{width:100%}
+.wprow{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--sub);grid-column:2;margin-top:4px}
+.wprow input{width:64px;padding:4px 8px}
+.results{margin-top:6px;border:1px solid var(--line);border-radius:10px;overflow:hidden;grid-column:1/-1}
+.results button{display:block;width:100%;text-align:left;background:var(--card);border:0;border-bottom:1px solid var(--line);padding:9px 12px;color:var(--ink)}
+.results button:last-child{border-bottom:0}
+.results button small{color:var(--sub);display:block}
+#map{height:260px;border-radius:var(--radius);border:1px solid var(--line);margin-bottom:12px;z-index:1}
+.hint{font-size:13px;background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:8px 10px;margin-top:10px}
+.err{font-size:14px;background:#fde8e8;color:#9b1c1c;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .err{background:#3a1717;color:#ffb4b4}}
+/* path cards */
+.pcard{cursor:pointer;transition:border-color .15s}
+.pcard.sel{border-color:var(--pri);box-shadow:0 0 0 1px var(--pri)}
+.phead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ptime{font-size:20px;font-weight:800;letter-spacing:-.5px}
+.pfare{text-align:right}
+.pfare .big{font-size:20px;font-weight:800;color:var(--pri)}
+.chain{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:8px 0 2px}
+.chain .arr{color:var(--sub);font-size:12px}
+details{margin-top:8px}
+summary{cursor:pointer;color:var(--pri);font-weight:600;font-size:14px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--sub);font-weight:600;font-size:12px}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.me td{background:var(--me);font-weight:700}
+.tblwrap{overflow-x:auto}
+.grp{border:1px dashed var(--line);border-radius:10px;padding:8px 10px;margin:8px 0}
+.grp h4{margin:0 0 4px;font-size:13px;display:flex;justify-content:space-between;gap:8px}
+.grp .ln{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:2px 0}
+.grp .ln span:first-child{color:var(--sub)}
+.grp .ln span:last-child{white-space:nowrap}
+.brk{font-size:12px;color:var(--warn);margin-top:2px}
+.total{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px;font-weight:800}
+.total .v{font-size:22px;color:var(--pri)}
+/* manual rows */
+.mrow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;align-items:end;padding:10px 0;border-bottom:1px solid var(--line)}
+.mrow:last-child{border-bottom:0}
+.mrow .num{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px}
+.mrow .c2{grid-column:span 2}
+.mrow .c3{grid-column:span 3}
+.mrow .c6{grid-column:1/-1}
+.mrow input,.mrow select{width:100%}
+.ftbl input{width:84px;text-align:right;padding:5px 8px}
+.seg{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:5px 0;border-bottom:1px dotted var(--line)}
+.seg:last-child{border-bottom:0}
+.seg .ic{width:22px;text-align:center}
+.seg .tx{flex:1}
+.seg .tx small{color:var(--sub);display:block}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 11px;font-size:13px;font-weight:600}
+.chips button.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.small{font-size:12px}
+ol.steps{padding-left:18px;margin:6px 0}
+ol.steps li{margin:3px 0}
+a{color:var(--pri)}
+@media (max-width:520px){
+  .stop{grid-template-columns:52px 1fr}
+  .stop .acts{grid-column:2;justify-content:flex-end}
+  .leg{grid-template-columns:52px 1fr}
+  .mrow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mrow .c2,.mrow .c3{grid-column:span 1}
+  .mrow .c6{grid-column:1/-1}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hwrap">
+    <div class="htop">
+      <h1>🚌 전국 환승요금 길잡이</h1>
+      <div class="agechip" title="만 나이 기준">
+        만 <input id="ageNum" type="number" min="0" max="120" inputmode="numeric">세
+        <b id="ageCat">일반</b>
+      </div>
+    </div>
+    <nav id="tabs">
+      <button data-t="route" class="on">길찾기</button>
+      <button data-t="manual">직접 입력</button>
+      <button data-t="table">요금표</button>
+      <button data-t="settings">설정</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+<!-- ============ 길찾기 ============ -->
+<section id="tab-route" class="on">
+  <div id="keyWarn"></div>
+  <div class="card">
+    <div id="stops"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn sm" id="addWp">＋ 환승지점 추가</button>
+      <button class="btn sm" id="swapBtn" title="출발·도착 바꾸기">⇅ 바꾸기</button>
+      <span class="muted small">환승지점을 넣으면 구간마다 탈 수단을 정할 수 있어요</span>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label class="f">출발 시각<input type="time" id="rDepart"></label>
+      <label class="f">정렬<select id="rSort">
+        <option value="rec">추천순</option>
+        <option value="time">최소시간</option>
+        <option value="transfer">최소환승</option>
+        <option value="fare">내 요금 낮은 순</option>
+      </select></label>
+    </div>
+    <div style="margin-top:12px"><button class="btn primary" id="rGo">경로 찾기</button></div>
+    <div id="pickHint"></div>
+  </div>
+  <div id="map"></div>
+  <div id="rOut"></div>
+</section>
+
+<!-- ============ 직접 입력 ============ -->
+<section id="tab-manual">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <b>구간 직접 입력</b>
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px">출발<input type="time" id="mDepart"></label>
+    </div>
+    <p class="muted" style="margin:6px 0 0">API 키 없이도 쓸 수 있어요. 탄 순서대로 구간을 넣으면 지역별 환승 규칙에 따라 요금을 계산합니다.</p>
+    <div id="mRows"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn sm" id="mAddBus">＋ 🚌 버스 구간</button>
+      <button class="btn sm" id="mAddSub">＋ 🚇 지하철 구간</button>
+      <button class="btn sm ghost" id="mClear">모두 지우기</button>
+    </div>
+  </div>
+  <div id="mOut"></div>
+</section>
+
+<!-- ============ 요금표 ============ -->
+<section id="tab-table">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <label class="f">지역<select id="tRegion"></select></label>
+      <div class="row">
+        <button class="btn sm" id="tSave">수정 저장</button>
+        <button class="btn sm ghost" id="tReset">기본값 복원</button>
+      </div>
+    </div>
+    <div id="tBody" style="margin-top:10px"></div>
+  </div>
+  <div class="card muted small" id="tFoot"></div>
+</section>
+
+<!-- ============ 설정 ============ -->
+<section id="tab-settings">
+  <div class="card">
+    <b>나이</b>
+    <div class="row" style="margin-top:8px">
+      <label class="f">생년월일 (입력하면 만 나이 자동 계산)<input type="date" id="birth"></label>
+      <button class="btn sm ghost" id="birthClear">지우기</button>
+    </div>
+  </div>
+  <div class="card">
+    <b>ODsay API 키 (자동 길찾기용)</b>
+    <div class="row" style="margin-top:8px">
+      <input id="apiKey" type="password" placeholder="ODsay LAB URI 플랫폼 키" style="flex:1" autocomplete="off">
+      <button class="btn sm" id="keyShow">보기</button>
+      <button class="btn sm" id="keyTest">연결 테스트</button>
+    </div>
+    <div id="keyMsg" class="small" style="margin-top:6px"></div>
+    <ol class="steps muted small">
+      <li><a href="https://lab.odsay.com" target="_blank" rel="noopener">lab.odsay.com</a>에 가입하고 애플리케이션을 등록합니다.</li>
+      <li>애플리케이션의 플랫폼 설정에서 <b>URI</b>를 고르고, 이 파일을 올린 주소(예: <code>https://내아이디.github.io</code>)를 등록합니다.</li>
+      <li>발급된 키를 위에 붙여넣습니다. 키는 이 브라우저에만 저장됩니다.</li>
+    </ol>
+    <p class="muted small" style="margin:4px 0 0">파일을 더블클릭해 바로 열면(file://) 주소가 없어서 ODsay가 거절할 수 있어요. 이 경우 GitHub Pages 같은 곳에 올려서 쓰거나, 키 없이 <b>직접 입력</b> 탭을 쓰면 됩니다.</p>
+  </div>
+  <div class="card">
+    <b>계산 옵션</b>
+    <div class="row" style="margin-top:8px">
+      <label class="f">환승 대기시간 기본값(분)<input type="number" id="defWait" min="0" max="60" style="width:110px"></label>
+    </div>
+    <p class="muted small" style="margin:6px 0 0">길찾기 결과의 갈아타기마다 도보시간에 이 대기시간을 더해 환승 인정 시간(보통 30분)을 넘는지 판단합니다.</p>
+  </div>
+  <div class="card">
+    <b>요금 데이터 (JSON)</b>
+    <p class="muted small" style="margin:4px 0 8px">요금이 바뀌면 여기서 직접 고치거나 요금표 탭에서 수정하세요.</p>
+    <textarea id="dbJson" rows="10" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" id="dbApply">JSON 적용</button>
+      <button class="btn sm ghost" id="dbReset">기본값 복원</button>
+      <span id="dbMsg" class="small"></span>
+    </div>
+  </div>
+</section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+'use strict';
+/*ENGINE_START*/
+/* ---------------------------------------------------------------
+   요금 데이터 (교통카드 기준, 원) — f: [일반, 청소년, 어린이]
+   est: true = 공식 확인이 덜 된 추정값
+   조사 기준일 2026-11-05
+---------------------------------------------------------------- */
+const FARE_DB_DEFAULT = {
+  version: '2026-11-05',
+  regions: {
+    seoul: { name:'서울', group:'capital', model:'capital', window:30, nightWindow:60, maxTransfers:4,
+      seniorSubwayFree:65, seniorBusFree:null,
+      bus:{
+        trunk:{label:'간선·지선', f:[1500,900,550]},
+        circular:{label:'순환·차등', f:[1400,800,500]},
+        village:{label:'마을버스', f:[1200,600,400]},
+        wide:{label:'광역(빨간버스)', f:[3000,1700,1500], dist:30, est:true},
+        night:{label:'심야(N버스)', f:[2500,1600,1400]}
+      },
+      subway:{label:'수도권 전철', f:[1550,900,550]},
+      note:'수도권 통합환승: 30분 이내(21~07시 60분), 최대 4회 환승. 총 이용거리 10km 초과 시 5km마다 100원(청소년 80·어린이 50), 50km 초과 시 8km마다. 광역버스 포함 시 기본거리 30km. 06:30 이전 첫 승차 조조할인 20%.',
+      src:'서울시 교통정책과, 서울시 버스정책과(2023.8 조정), 서울교통공사(2025.6.28 조정)'
+    },
+    gyeonggi: { name:'경기', group:'capital', model:'capital', window:30, nightWindow:60, maxTransfers:4,
+      seniorSubwayFree:65, seniorBusFree:null,
+      bus:{
+        general:{label:'일반형 시내버스', f:[1650,1160,830]},
+        village:{label:'마을버스', f:[1650,1160,830], est:true},
+        seat:{label:'좌석형', f:[2650,1860,1330], dist:10},
+        express:{label:'직행좌석(광역)', f:[3200,2300,1600], dist:30},
+        circ:{label:'경기순환', f:[3450,2420,1730], dist:30},
+        mbus:{label:'광역급행 M버스', f:[3200,2300,1600], dist:30}
+      },
+      subway:{label:'수도권 전철', f:[1550,900,550]},
+      note:'2025.10.25 요금 조정 반영. 마을버스 요금은 시·군마다 다를 수 있습니다.',
+      src:'경기도 보도자료(2025.10.22), 수원시(2025.10)'
+    },
+    incheon: { name:'인천', group:'capital', model:'capital', window:30, nightWindow:60, maxTransfers:4,
+      seniorSubwayFree:65, seniorBusFree:null,
+      bus:{
+        trunk:{label:'간선형', f:[1500,1050,600]},
+        branch:{label:'지선형', f:[1200,850,500]},
+        seat:{label:'좌석(타시도)', f:[1550,1100,650], dist:10},
+        wide:{label:'광역(직행좌석)', f:[3000,1650,1200], dist:30},
+        mbus:{label:'광역급행 M버스', f:[3200,2300,1600], dist:30},
+        brt:{label:'BRT(7700)', f:[2600,1600,1200], dist:30},
+        night:{label:'심야(N)', f:[1900,1350,800]}
+      },
+      subway:{label:'수도권 전철', f:[1550,900,550]},
+      note:'인천시 대중교통요금표(2025.12.31 기준).',
+      src:'인천광역시 공공요금안내'
+    },
+    busan: { name:'부산·김해·양산', group:'busan', model:'max', window:30, maxTransfers:2,
+      seniorSubwayFree:65, seniorBusFree:null,
+      bus:{
+        general:{label:'일반버스', f:[1550,800,0]},
+        express:{label:'급행·좌석', f:[2100,1350,0]},
+        night:{label:'심야(일반형)', f:[2050,1000,0], est:true},
+        village:{label:'마을버스', f:[1480,750,0], est:true}
+      },
+      subway:{label:'부산 도시철도', f:[1600,1050,0], zone:{km:10, f:[1800,1200,0]}},
+      note:'만 6~12세 어린이 교통카드 무료. 도시철도 10km 초과 시 2구간. 버스↔도시철도 무료 환승(2구간이면 차액). 환승 2회까지.',
+      src:'부산교통공사 운임표, 부산시 요금안내'
+    },
+    daegu: { name:'대구·경산권', group:'daegu', model:'max', window:30, maxTransfers:2,
+      seniorSubwayFree:70, seniorBusFree:70, seniorEst:true,
+      bus:{
+        general:{label:'시내버스', f:[1500,850,400], est:true},
+        express:{label:'급행버스', f:[1950,1100,600], est:true}
+      },
+      subway:{label:'대구 도시철도(균일)', f:[1500,850,400]},
+      note:'도시철도 전 구간 균일요금. 30분 이내 2회 무료 환승. 어르신 무임 기준 연령은 단계적으로 조정되고 있어 확인이 필요합니다.',
+      src:'대구시(2024.1.13 조정), 이즐 안내(2026.1)'
+    },
+    daejeon: { name:'대전', group:'daejeon', model:'max', window:30, maxTransfers:3,
+      seniorSubwayFree:65, seniorBusFree:null,
+      bus:{ general:{label:'시내버스', f:[1500,750,350]} },
+      subway:{label:'대전 도시철도', f:[1550,880,550], zone:{km:10, f:[1650,960,600]}},
+      note:'버스→도시철도 환승 시 일반 50원 추가(차액), 청소년·어린이 무료 환승. 30분 이내 3회.',
+      src:'대전광역시 주요공공요금'
+    },
+    gwangju: { name:'광주', group:'gwangju', model:'max', window:30, maxTransfers:2, transferEst:true,
+      seniorSubwayFree:65, seniorBusFree:null,
+      bus:{ general:{label:'시내·마을버스', f:[1500,400,0]} },
+      subway:{label:'광주 도시철도', f:[1250,450,0], est:true},
+      note:'2026년 6월 성인 버스요금 1,500원 인상안 반영. 청소년 반값·어린이 무료는 광주 G-패스(등록 카드) 기준.',
+      src:'광주시 버스정책심의위원회(2026.3), 광주 G-패스'
+    },
+    ulsan: { name:'울산', group:'ulsan', model:'max', window:30, maxTransfers:1, transferEst:true,
+      seniorSubwayFree:65, seniorBusFree:70, subwayRef:'busan',
+      bus:{ general:{label:'시내버스(일반)', f:[1500,1000,0]} },
+      note:'어린이 무료, 70세 이상 시내버스 무료(전용카드). 65세 확대·청소년 50% 할인은 추진 중. 청소년 요금은 추정값.',
+      src:'울산시(2026.1, 2026.4 발표)'
+    },
+    sejong: { name:'세종', group:'daejeon', model:'max', window:30, maxTransfers:2, transferEst:true,
+      seniorSubwayFree:65, seniorBusFree:70, subwayRef:'daejeon',
+      bus:{ general:{label:'시내버스·BRT', f:[1400,1100,550], est:true} },
+      note:'세종 거주 어린이·청소년·70세 이상은 이응패스로 무료(거주자 한정). 일반 요금은 추정값.',
+      src:'세종시 이응패스 안내'
+    },
+    jeonju: { name:'전주·완주', group:'jeonju', model:'max', window:40, maxTransfers:1, transferEst:true,
+      seniorSubwayFree:65, seniorBusFree:null, subwayRef:'seoul',
+      bus:{ general:{label:'시내버스', f:[1650,1300,800]} },
+      note:'2025.8.1 조정(현금 1,700/1,350/850원, 카드 50원 할인).',
+      src:'전주시(2025.7)'
+    },
+    jeju: { name:'제주', group:'jeju', model:'max', window:40, maxTransfers:1, transferEst:true,
+      seniorSubwayFree:65, seniorBusFree:70, subwayRef:'seoul',
+      bus:{ general:{label:'간선·지선', f:[1500,1200,600], est:true} },
+      note:'70세 이상 교통복지카드 무료. 요금은 추정값이니 확인하세요.',
+      src:'제주도 요금 인상 추진 보도(2025)'
+    },
+    other: { name:'기타 시·군', group:'other', model:'max', window:30, maxTransfers:1, transferEst:true,
+      seniorSubwayFree:65, seniorBusFree:null, subwayRef:'seoul',
+      bus:{
+        general:{label:'시내·농어촌버스', f:[1650,1150,750], est:true},
+        express:{label:'좌석·직행', f:[2200,1600,1100], est:true}
+      },
+      note:'도 단위 지역 평균 수준의 추정값입니다(현금 1,700~1,800원대). 시·군마다 무료·할인 정책이 다르니 요금표 탭에서 고쳐 쓰세요.',
+      src:'전국 시내버스 요금 보도 종합'
+    }
+  }
+};
+
+const REGION_BOXES = [
+  ['jeju',   33.10,33.60,126.10,127.00],
+  ['ulsan',  35.40,35.75,129.00,129.50],
+  ['busan',  34.95,35.42,128.75,129.32],
+  ['daegu',  35.60,36.02,128.35,128.80],
+  ['sejong', 36.47,36.75,127.10,127.40],
+  ['daejeon',36.18,36.50,127.25,127.56],
+  ['gwangju',35.05,35.27,126.64,127.02],
+  ['jeonju', 35.75,35.90,127.03,127.22],
+  ['seoul',  37.425,37.70,126.765,127.185],
+  ['incheon',37.35,37.65,126.35,126.795],
+  ['gyeonggi',36.89,38.30,126.35,127.85]
+];
+function detectRegion(lat,lng){
+  lat=+lat; lng=+lng;
+  for(const [k,a,b,c,d] of REGION_BOXES){ if(lat>=a&&lat<=b&&lng>=c&&lng<=d) return k; }
+  return 'other';
+}
+const SUBWAY_CITY = {1000:'seoul',7000:'busan',4000:'daegu',3000:'daejeon',6000:'gwangju'};
+
+function ageCat(age){
+  age=+age;
+  if(!(age>=0)) age=30;
+  if(age<6) return 'infant';
+  if(age<=12) return 'child';
+  if(age<=18) return 'youth';
+  if(age>=65) return 'senior';
+  return 'adult';
+}
+const CAT_LABEL={infant:'영유아',child:'어린이',youth:'청소년',adult:'일반',senior:'경로'};
+function catIdx(cat){ return cat==='youth'?1:cat==='child'?2:0; }
+
+function busTypeOf(region, key, db){
+  const r=db.regions[region]||db.regions.other;
+  return r.bus[key] ? key : Object.keys(r.bus)[0];
+}
+function subwayRegion(region, db){
+  const r=db.regions[region]||db.regions.other;
+  if(r.subway) return region;
+  return r.subwayRef && db.regions[r.subwayRef] && db.regions[r.subwayRef].subway ? r.subwayRef : 'seoul';
+}
+
+/* 한 구간의 기본요금 */
+function segFare(seg, age, db){
+  const cat=ageCat(age), idx=catIdx(cat);
+  const r=db.regions[seg.region]||db.regions.other;
+  if(cat==='infant') return {free:true, fare:0, reason:'만 6세 미만 무료(보호자 동반)'};
+  if(seg.mode==='subway'){
+    const sr=db.regions[subwayRegion(seg.region,db)];
+    if(age>=65 && r.seniorSubwayFree && age>=r.seniorSubwayFree) return {free:true, fare:0, reason:'경로 무임'};
+    let f=sr.subway.f[idx];
+    let zone2=false;
+    if(sr.subway.zone && (+seg.km||0)>sr.subway.zone.km){ f=sr.subway.zone.f[idx]; zone2=true; }
+    if(f===0) return {free:true, fare:0, reason:CAT_LABEL[cat]+' 무료'};
+    return {fare:f, distType:false, baseKm:10, label:sr.subway.label+(zone2?' 2구간':''), est:!!sr.subway.est, isSubway:true};
+  }
+  const tk=busTypeOf(seg.region, seg.type, db);
+  const t=r.bus[tk];
+  if(age>=65 && r.seniorBusFree && age>=r.seniorBusFree) return {free:true, fare:0, reason:'경로 무료(전용카드)'};
+  const f=t.f[idx];
+  if(f===0) return {free:true, fare:0, reason:CAT_LABEL[cat]+' 무료'};
+  return {fare:f, distType:!!t.dist, baseKm:t.dist||10, label:t.label, est:!!t.est};
+}
+
+function distSteps(km, baseKm){
+  if(km<=baseKm+1e-9) return 0;
+  const t1End = baseKm>=30 ? 60 : 50;
+  let s=Math.ceil((Math.min(km,t1End)-baseKm)/5 - 1e-9);
+  if(km>t1End+1e-9) s+=Math.ceil((km-t1End)/8 - 1e-9);
+  return s;
+}
+function windowFor(r, clock){
+  const m=((clock%1440)+1440)%1440;
+  if(r.nightWindow && (m>=21*60 || m<7*60)) return r.nightWindow;
+  return r.window||30;
+}
+function segName(s){
+  if(s.mode==='subway') return '🚇 '+(s.line||'지하철');
+  if(s.mode==='bus') return '🚌 '+(s.line?s.line+'번':'버스');
+  return s.line||s.mode;
+}
+
+/* 전체 이동의 요금 계산 */
+function computeTrip(segs, age, opts){
+  opts=opts||{};
+  const db=opts.db, depart=(opts.depart!=null?opts.depart:8*60), defWait=(opts.defaultWait!=null?opts.defaultWait:5);
+  const cat=ageCat(age), idx=catIdx(cat);
+  let clock=depart, pendingGap=0, first=true, cur=null;
+  const chains=[];
+  for(const s of segs){
+    if(s.mode==='walk'){ const m=+s.min||0; pendingGap+=m; clock+=m; continue; }
+    if(s.mode!=='bus' && s.mode!=='subway'){
+      chains.push({external:true, seg:s, total:0}); cur=null; clock+=+s.min||0; pendingGap=0; first=false; continue;
+    }
+    const wait = (s.wait!=null && s.wait!=='') ? +s.wait : (first?0:defWait);
+    const gap = pendingGap + wait;
+    clock += wait;
+    const r=db.regions[s.region]||db.regions.other;
+    const f=segFare(s,age,db);
+    const win=windowFor(r,clock);
+    if(cur && cur.group===r.group && gap<=win && cur.rides.length<(r.maxTransfers+1)){
+      cur.rides.push({seg:s,f,gap});
+    }else{
+      let why=null;
+      if(cur){ why = cur.group!==r.group ? '요금 권역이 달라 새로 계산' : gap>win ? `환승 인정시간 초과(${gap}분 > ${win}분)` : `환승 횟수 초과(최대 ${r.maxTransfers}회)`; }
+      cur={group:r.group, model:r.model, region:s.region, rides:[{seg:s,f,gap}], startClock:clock, breakReason:why};
+      chains.push(cur);
+    }
+    clock += +s.min||0; pendingGap=0; first=false;
+  }
+  let total=0, n=0, est=false;
+  for(const c of chains){
+    if(c.external) continue;
+    evalChain(c, idx, n===0);
+    total+=c.total; n++;
+    if(c.rides.some(r=>r.f.est)) est=true;
+    const rr=db.regions[c.region]; if(rr && (rr.transferEst||rr.seniorEst)) est=true;
+  }
+  return {age:+age, cat, chains, total, est, hasExternal:chains.some(c=>c.external)};
+}
+function evalChain(c, idx, isFirst){
+  const lines=[]; let running=0;
+  const paid=c.rides.filter(r=>!r.f.free);
+  c.rides.forEach((r,i)=>{
+    const nm=segName(r.seg);
+    if(r.f.free){ lines.push({label:nm, amt:0, note:r.f.reason}); return; }
+    if(running===0){ lines.push({label:nm+' 기본요금', amt:r.f.fare, note:r.f.label}); running=r.f.fare; }
+    else{
+      const d=Math.max(0,r.f.fare-running);
+      lines.push({label:nm+' 환승', amt:d, note:d?'기본요금 차액':'무료 환승'});
+      running=Math.max(running,r.f.fare);
+    }
+  });
+  let total=running;
+  if(c.model==='capital' && paid.length){
+    const need = paid.length>1 || paid.some(r=>r.f.distType||r.f.isSubway);
+    if(need){
+      const km=paid.reduce((a,r)=>a+(+r.seg.km||0),0);
+      const baseKm=Math.max(...paid.map(r=>r.f.baseKm||10));
+      const st=distSteps(km,baseKm);
+      if(st>0){ const unit=[100,80,50][idx]; lines.push({label:`거리 추가요금 (총 ${km.toFixed(1)}km, 기본 ${baseKm}km)`, amt:st*unit, note:`${st}단계 × ${unit}원`}); total+=st*unit; }
+    }
+    const m=((c.startClock%1440)+1440)%1440;
+    if(isFirst && m>=240 && m<390 && !c.rides[0].f.free){
+      const d=Math.floor(c.rides[0].f.fare*0.2/10)*10;
+      if(d>0){ lines.push({label:'조조할인 (06:30 이전 첫 승차 20%)', amt:-d}); total-=d; }
+    }
+  }
+  c.total=Math.max(0,total); c.lines=lines;
+}
+
+const REP_AGES=[
+  {label:'영유아 (만 0~5세)', age:4},
+  {label:'어린이 (만 6~12세)', age:10},
+  {label:'청소년 (만 13~18세)', age:16},
+  {label:'일반 (만 19~64세)', age:30},
+  {label:'경로 (만 65~69세)', age:67},
+  {label:'경로 (만 70세 이상)', age:72}
+];
+
+/* ODsay 결과 → 구간 */
+function mapBusType(region, odType, busNo, db){
+  const r=db.regions[region]||db.regions.other; const no=String(busNo||'');
+  const has=k=>!!r.bus[k];
+  if(/^N/i.test(no) && has('night')) return 'night';
+  if(/^M/i.test(no) && has('mbus')) return 'mbus';
+  if(/순환/.test(no) && has('circ')) return 'circ';
+  const t=+odType;
+  switch(region){
+    case 'seoul':
+      if(t===3) return 'village'; if(t===13) return 'circular'; if([4,5,14].includes(t)) return 'wide'; return 'trunk';
+    case 'gyeonggi':
+      if(t===3) return 'village'; if(t===2) return 'seat'; if([4,5,14,15,22].includes(t)) return 'express'; return 'general';
+    case 'incheon':
+      if(t===3||t===12) return 'branch'; if(t===2) return 'seat'; if([4,5,14].includes(t)) return 'wide'; if(t===6) return 'brt'; return 'trunk';
+    default:
+      if(t===3 && has('village')) return 'village';
+      if([2,4,15,22,26].includes(t) && has('express')) return 'express';
+      return Object.keys(r.bus)[0];
+  }
+}
+function pathToSegs(path, db){
+  const segs=[];
+  for(const sp of (path.subPath||[])){
+    const tt=+sp.trafficType;
+    const lane=(sp.lane&&sp.lane[0])||{};
+    const coords=(sp.passStopList&&sp.passStopList.stations||[]).map(s=>[+s.y,+s.x]);
+    if(tt===3){ segs.push({mode:'walk', min:+sp.sectionTime||0, m:+sp.distance||0}); continue; }
+    if(tt===1){
+      let region=SUBWAY_CITY[lane.subwayCityCode] || detectRegion(sp.startY, sp.startX);
+      segs.push({mode:'subway', region, line:lane.name||'지하철', km:(+sp.distance||0)/1000, min:+sp.sectionTime||0,
+        from:sp.startName, to:sp.endName, stops:+sp.stationCount||0, coords});
+      continue;
+    }
+    if(tt===2){
+      const region=detectRegion(sp.startY, sp.startX);
+      const type=mapBusType(region, lane.type, lane.busNo, db);
+      segs.push({mode:'bus', region, type, odType:lane.type, line:lane.busNo||'버스', km:(+sp.distance||0)/1000, min:+sp.sectionTime||0,
+        from:sp.startName, to:sp.endName, stops:+sp.stationCount||0, coords});
+      continue;
+    }
+    segs.push({mode:'ext', line:(lane.name||lane.busNo||'시외·기차 구간'), from:sp.startName, to:sp.endName, min:+sp.sectionTime||0, coords});
+  }
+  return segs;
+}
+/*ENGINE_END*/
+
+/* =================== UI =================== */
+const $=(s,el=document)=>el.querySelector(s);
+const $$=(s,el=document)=>[...el.querySelectorAll(s)];
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const won=n=>n==null?'-':(n===0?'무료':Math.round(n).toLocaleString('ko-KR')+'원');
+const store={
+  get(k,d){ try{ const v=localStorage.getItem('bf.'+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k,v){ try{ localStorage.setItem('bf.'+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem('bf.'+k); }catch(e){} }
+};
+const clone=o=>JSON.parse(JSON.stringify(o));
+const S={
+  key: store.get('key',''),
+  birth: store.get('birth',''),
+  ageNum: store.get('age',30),
+  wait: store.get('wait',5),
+  db: store.get('db',null) || clone(FARE_DB_DEFAULT)
+};
+if(!S.db.regions || !S.db.regions.seoul) S.db=clone(FARE_DB_DEFAULT);
+
+function userAge(){
+  if(S.birth){
+    const b=new Date(S.birth+'T00:00:00'), t=new Date();
+    if(!isNaN(b)){
+      let a=t.getFullYear()-b.getFullYear();
+      if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) a--;
+      return Math.max(0,a);
+    }
+  }
+  return +S.ageNum>=0 ? +S.ageNum : 30;
+}
+function timeToMin(v){ if(!v) return null; const [h,m]=v.split(':').map(Number); return h*60+m; }
+function nowHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function opts(depart){ return {db:S.db, depart, defaultWait:+S.wait||0}; }
+
+/* ---------- 나이 ---------- */
+function refreshAge(){
+  const a=userAge();
+  $('#ageNum').value=a;
+  $('#ageNum').disabled=!!S.birth;
+  $('#ageCat').textContent=CAT_LABEL[ageCat(a)];
+}
+$('#ageNum').addEventListener('input',e=>{ S.ageNum=+e.target.value; store.set('age',S.ageNum); $('#ageCat').textContent=CAT_LABEL[ageCat(userAge())]; rerenderAll(); });
+
+/* ---------- 탭 ---------- */
+$('#tabs').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  $$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  $$('main section').forEach(s=>s.classList.toggle('on', s.id==='tab-'+b.dataset.t));
+  if(b.dataset.t==='route' && map) setTimeout(()=>map.invalidateSize(),50);
+  if(b.dataset.t==='table') renderTable();
+  if(b.dataset.t==='settings') $('#dbJson').value=JSON.stringify(S.db,null,1);
+  window.scrollTo(0,0);
+});
+function goTab(t){ $(`#tabs button[data-t="${t}"]`).click(); }
+
+/* ---------- 결과 렌더 (공통) ---------- */
+function regionName(k){ return (S.db.regions[k]||S.db.regions.other).name; }
+function renderBreakdown(trip){
+  let h='';
+  trip.chains.forEach((c,i)=>{
+    if(c.external){
+      h+=`<div class="grp"><h4><span><span class="badge ext">별도</span> ${esc(c.seg.line)}</span><span>요금 별도</span></h4><div class="muted small">${esc(c.seg.from||'')} → ${esc(c.seg.to||'')} · 시외버스·기차 등은 이 계산에 포함되지 않아요.</div></div>`;
+      return;
+    }
+    h+=`<div class="grp"><h4><span>${i+1}번째 결제 · ${esc(regionName(c.region))}</span><span>${won(c.total)}</span></h4>`;
+    if(c.breakReason) h+=`<div class="brk">↳ ${esc(c.breakReason)}</div>`;
+    c.lines.forEach(l=>{ h+=`<div class="ln"><span>${esc(l.label)}${l.note?` <span class="small">· ${esc(l.note)}</span>`:''}</span><span>${l.amt<0?'−'+won(-l.amt):(l.amt===0?'0원':'+'+won(l.amt))}</span></div>`; });
+    h+='</div>';
+  });
+  return h;
+}
+function renderAgeTable(segs, depart){
+  const me=userAge();
+  let rows=REP_AGES.map(r=>({label:r.label, age:r.age}));
+  const meCat=ageCat(me);
+  const repSame = rows.find(r=>ageCat(r.age)===meCat && (meCat!=='senior' || (me>=70)===(r.age>=70)));
+  let h='<div class="tblwrap"><table><thead><tr><th>연령</th><th class="n">요금</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const t=computeTrip(segs, r.age, opts(depart));
+    const isMe = r===repSame;
+    h+=`<tr class="${isMe?'me':''}"><td>${esc(r.label)}${isMe?` <span class="badge">나 (만 ${me}세)</span>`:''}</td><td class="n">${won(t.total)}${t.hasExternal?' +α':''}</td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+function segListHTML(segs){
+  return segs.map(s=>{
+    if(s.mode==='walk') return `<div class="seg"><div class="ic">🚶</div><div class="tx">도보 ${s.m?Math.round(s.m)+'m · ':''}${s.min}분</div></div>`;
+    if(s.mode==='ext') return `<div class="seg"><div class="ic">🚆</div><div class="tx">${esc(s.line)}<small>${esc(s.from||'')} → ${esc(s.to||'')} · ${s.min}분</small></div></div>`;
+    const r=S.db.regions[s.region]||S.db.regions.other;
+    const tl = s.mode==='bus' ? (r.bus[busTypeOf(s.region,s.type,S.db)]||{}).label : (S.db.regions[subwayRegion(s.region,S.db)].subway||{}).label;
+    return `<div class="seg"><div class="ic">${s.mode==='bus'?'🚌':'🚇'}</div><div class="tx"><b>${esc(s.line||'')}</b> <span class="badge ${s.mode}">${esc(r.name)} · ${esc(tl||'')}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''} · ${(+s.km||0).toFixed(1)}km${s.stops?' · '+s.stops+'개 정류장':''}${s.min?' · '+s.min+'분':''}</small></div></div>`;
+  }).join('');
+}
+function fareSummaryHTML(segs, depart, title){
+  const trip=computeTrip(segs, userAge(), opts(depart));
+  return `<div class="card">
+    ${title?`<b>${esc(title)}</b>`:''}
+    <div class="total"><span>내 요금 (만 ${trip.age}세 · ${CAT_LABEL[trip.cat]})</span><span class="v">${won(trip.total)}${trip.hasExternal?' +α':''}</span></div>
+    ${trip.est?'<div class="hint">일부 요금·환승 규칙에 추정값이 들어 있어요. 요금표 탭에서 확인하고 고칠 수 있습니다.</div>':''}
+    ${renderBreakdown(trip)}
+    <details open><summary>연령별 요금 전체 보기</summary>${renderAgeTable(segs,depart)}</details>
+    <p class="muted small" style="margin:8px 0 0">교통카드 기준이며 K-패스·기후동행카드 등 환급/정기권은 반영하지 않았어요.</p>
+  </div>`;
+}
+
+/* ---------- 지도 ---------- */
+let map=null, mapLayer=null;
+if(window.L){
+  map=L.map('map',{zoomControl:true}).setView([37.5665,126.978],11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
+  mapLayer=L.layerGroup().addTo(map);
+  map.on('click',e=>{
+    if(pickTarget==null) return;
+    const i=pickTarget; pickTarget=null; $('#pickHint').innerHTML='';
+    P.points[i]={name:`지도 선택 (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`, y:e.latlng.lat, x:e.latlng.lng};
+    renderStops(); drawMap();
+    reverseName(e.latlng.lat,e.latlng.lng).then(n=>{ if(n && P.points[i] && P.points[i].y===e.latlng.lat){ P.points[i].name=n; renderStops(); } });
+  });
+}else{
+  $('#map').style.display='none';
+}
+const PT_COLORS=['#1f6feb','#b7791f','#d6336c'];
+function drawMap(selectedSegs){
+  if(!map) return;
+  mapLayer.clearLayers();
+  const bounds=[];
+  P.points.forEach((p,i)=>{
+    if(p.y==null) return;
+    const col = i===0?'#1f6feb':i===P.points.length-1?'#d6336c':'#b7791f';
+    L.circleMarker([p.y,p.x],{radius:8,color:'#fff',weight:2,fillColor:col,fillOpacity:1}).bindTooltip(p.name||'').addTo(mapLayer);
+    bounds.push([p.y,p.x]);
+  });
+  (selectedSegs||[]).forEach(s=>{
+    if(!s.coords||s.coords.length<2) return;
+    const col = s.mode==='bus'?'#2e9d4f':s.mode==='subway'?'#e0602b':'#8b5cf6';
+    L.polyline(s.coords,{color:col,weight:5,opacity:.85}).addTo(mapLayer);
+    s.coords.forEach(c=>bounds.push(c));
+  });
+  if(bounds.length>1) map.fitBounds(bounds,{padding:[24,24]});
+  else if(bounds.length===1) map.setView(bounds[0],14);
+}
+
+/* ---------- 장소 검색 ---------- */
+async function reverseName(lat,lng){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=17&accept-language=ko`);
+    const j=await r.json(); if(!j||!j.address) return null;
+    const a=j.address;
+    return a.amenity||a.building||a.road&&((a.road)+(a.house_number?' '+a.house_number:''))||(j.display_name||'').split(',')[0];
+  }catch(e){ return null; }
+}
+async function searchPlaces(q){
+  const out=[]; const tasks=[];
+  if(S.key){
+    tasks.push(odsay('searchStation',{stationName:q}).then(r=>{
+      (r.station||[]).slice(0,6).forEach(s=>out.push({name:s.stationName+(+s.stationClass===2?'역':''), sub:[s.cityName,s.laneName||(+s.stationClass===1?'버스정류장':'')].filter(Boolean).join(' · '), x:+s.x, y:+s.y, k:'odsay'}));
+    }).catch(()=>{}));
+  }
+  tasks.push(fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=kr&limit=6&accept-language=ko&q=${encodeURIComponent(q)}`)
+    .then(r=>r.json()).then(arr=>{ (arr||[]).forEach(p=>{ const parts=(p.display_name||'').split(',').map(s=>s.trim()); out.push({name:parts[0], sub:parts.slice(1,4).join(' '), x:+p.lon, y:+p.lat, k:'osm'}); }); }).catch(()=>{}));
+  await Promise.all(tasks);
+  return out;
+}
+
+/* ---------- ODsay ---------- */
+async function odsay(api, params){
+  if(!S.key) throw new Error('설정 탭에서 ODsay API 키를 먼저 넣어주세요.');
+  const qs=new URLSearchParams(Object.assign({},params,{apiKey:S.key, lang:0}));
+  let res;
+  try{ res=await fetch(`https://api.odsay.com/v1/api/${api}?${qs.toString()}`); }
+  catch(e){ throw new Error('ODsay 서버에 연결하지 못했어요. 인터넷 연결이나 키에 등록한 URI(도메인)를 확인하세요.'); }
+  const j=await res.json();
+  if(j.error){
+    const e=Array.isArray(j.error)?j.error[0]:j.error;
+    const msg=e.message||e.msg||JSON.stringify(e);
+    if(String(e.code)==='-98') throw new Error('출발지와 도착지가 너무 가까워요(700m 이내). 걸어가는 게 빠릅니다.');
+    throw new Error('ODsay: '+msg+(/ApiKey|auth|인증/i.test(msg)?' — 키 또는 등록한 URI를 확인하세요.':''));
+  }
+  return j.result;
+}
+
+/* ---------- 길찾기 상태 ---------- */
+const MODE_OPTS=[
+  ['auto','자동 (버스·지하철 전부)'],
+  ['bus','🚌 버스만'],
+  ['mixed','🚌+🚇 버스+지하철 (섞어서)'],
+  ['subway','🚇 지하철만'],
+  ['walk','🚶 걸어서']
+];
+const P={
+  points: store.get('points', [{name:'',x:null,y:null},{name:'',x:null,y:null}]),
+  modes: store.get('modes', ['auto']),
+  waits: store.get('waits', []),
+  legs: null, sel: [], single: null, selIdx:0, depart:null
+};
+function savePlan(){ store.set('points',P.points.map(p=>({name:p.name,x:p.x,y:p.y}))); store.set('modes',P.modes); store.set('waits',P.waits); }
+function normPlan(){
+  while(P.modes.length<P.points.length-1) P.modes.push('auto');
+  P.modes.length=P.points.length-1;
+  while(P.waits.length<P.points.length) P.waits.push(+S.wait||5);
+}
+let pickTarget=null;
+
+function renderStops(){
+  normPlan(); savePlan();
+  const n=P.points.length;
+  let h='';
+  P.points.forEach((p,i)=>{
+    const lab = i===0?'출발':i===n-1?'도착':'환승 '+i;
+    const col = i===0?'#1f6feb':i===n-1?'#d6336c':'#b7791f';
+    h+=`<div class="stop" data-i="${i}">
+      <div class="lab"><span class="dot" style="background:${col}"></span>${lab}</div>
+      <input class="pname" placeholder="${i===0?'출발지 (역·정류장·장소)':i===n-1?'도착지':'갈아탈 곳 (예: 사당역)'}" value="${esc(p.name)}" enterkeyhint="search">
+      <div class="acts">
+        <button class="btn sm" data-a="find" title="검색">🔍</button>
+        <button class="btn sm" data-a="pick" title="지도에서 고르기">📍</button>
+        ${i===0?'<button class="btn sm" data-a="gps" title="현재 위치">◎</button>':''}
+        ${i>0&&i<n-1?'<button class="btn sm" data-a="del" title="삭제">✕</button>':''}
+      </div>
+      ${p.y!=null?`<div class="muted small" style="grid-column:2/-1">✓ ${p.y.toFixed(4)}, ${p.x.toFixed(4)}</div>`:''}
+      ${i>0&&i<n-1?`<div class="wprow">여기서 갈아탈 때 대기 <input type="number" min="0" max="90" data-w="${i}" value="${P.waits[i]}"> 분</div>`:''}
+      <div class="results" style="display:none"></div>
+    </div>`;
+    if(i<n-1){
+      h+=`<div class="leg"><div class="line"></div><select data-m="${i}">${MODE_OPTS.map(([v,t])=>`<option value="${v}" ${P.modes[i]===v?'selected':''}>${t}</option>`).join('')}</select></div>`;
+    }
+  });
+  $('#stops').innerHTML=h;
+}
+$('#stops').addEventListener('click',async e=>{
+  const st=e.target.closest('.stop'); if(!st) return;
+  const i=+st.dataset.i;
+  const resBtn=e.target.closest('.results button');
+  if(resBtn){
+    const it=JSON.parse(resBtn.dataset.p);
+    P.points[i]={name:it.name, x:it.x, y:it.y};
+    renderStops(); drawMap(); return;
+  }
+  const b=e.target.closest('button[data-a]'); if(!b) return;
+  const a=b.dataset.a;
+  if(a==='del'){ P.points.splice(i,1); P.modes.splice(i,1); P.waits.splice(i,1); renderStops(); drawMap(); return; }
+  if(a==='pick'){ pickTarget=i; $('#pickHint').innerHTML=`<div class="hint">지도를 눌러 <b>${i===0?'출발지':i===P.points.length-1?'도착지':'환승지점 '+i}</b>를 고르세요.</div>`; $('#map').scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  if(a==='gps'){
+    if(!navigator.geolocation){ alert('이 브라우저는 위치를 지원하지 않아요.'); return; }
+    b.innerHTML='<span class="spin"></span>';
+    navigator.geolocation.getCurrentPosition(pos=>{
+      P.points[0]={name:'현재 위치', y:pos.coords.latitude, x:pos.coords.longitude}; renderStops(); drawMap();
+    },()=>{ alert('위치를 가져오지 못했어요. 권한을 확인하세요.'); renderStops(); },{enableHighAccuracy:true,timeout:10000});
+    return;
+  }
+  if(a==='find') doFind(st,i);
+});
+async function doFind(st,i){
+  const q=$('.pname',st).value.trim(); if(!q) return;
+  const box=$('.results',st);
+  box.style.display='block'; box.innerHTML='<div class="muted small" style="padding:10px"><span class="spin"></span> 찾는 중…</div>';
+  const list=await searchPlaces(q);
+  if(!list.length){ box.innerHTML='<div class="muted small" style="padding:10px">결과가 없어요. 다른 이름으로 찾거나 📍로 지도에서 골라주세요.</div>'; return; }
+  box.innerHTML=list.slice(0,10).map(it=>`<button data-p='${esc(JSON.stringify(it))}'>${esc(it.name)}<small>${it.k==='odsay'?'🚏 ':'📌 '}${esc(it.sub||'')}</small></button>`).join('');
+}
+$('#stops').addEventListener('keydown',e=>{
+  if(e.key==='Enter' && e.target.classList.contains('pname')){ const st=e.target.closest('.stop'); doFind(st,+st.dataset.i); }
+});
+$('#stops').addEventListener('change',e=>{
+  if(e.target.matches('select[data-m]')){ P.modes[+e.target.dataset.m]=e.target.value; savePlan(); }
+  if(e.target.matches('input[data-w]')){ P.waits[+e.target.dataset.w]=Math.max(0,+e.target.value||0); savePlan(); if(P.legs) renderRoute(); }
+  if(e.target.classList.contains('pname')){ const i=+e.target.closest('.stop').dataset.i; if(P.points[i].name!==e.target.value){ P.points[i]={name:e.target.value,x:null,y:null}; savePlan(); } }
+});
+$('#addWp').onclick=()=>{ const n=P.points.length; P.points.splice(n-1,0,{name:'',x:null,y:null}); P.modes.splice(n-1,0,'auto'); P.waits.splice(n-1,0,+S.wait||5); renderStops(); };
+$('#swapBtn').onclick=()=>{ P.points.reverse(); P.modes.reverse(); P.waits.reverse(); renderStops(); drawMap(); };
+
+/* ---------- 경로 계산 ---------- */
+function hav(a,b){ const R=6371000, t=Math.PI/180; const dLa=(b.y-a.y)*t, dLo=(b.x-a.x)*t; const x=Math.sin(dLa/2)**2+Math.cos(a.y*t)*Math.cos(b.y*t)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+async function fetchLeg(a,b,mode){
+  if(mode==='walk'){
+    const m=Math.round(hav(a,b)*1.3); const min=Math.max(1,Math.round(m/75));
+    return [{walk:true, info:{totalTime:min, totalWalk:m, busTransitCount:0, subwayTransitCount:0, payment:0}, segs:[{mode:'walk',min,m}]}];
+  }
+  const type = mode==='bus'?2 : mode==='subway'?1 : 0;
+  const r=await odsay('searchPubTransPathT',{SX:a.x,SY:a.y,EX:b.x,EY:b.y,OPT:0,SearchPathType:type});
+  let paths=(r&&r.path)||[];
+  if(mode==='mixed'){ const mx=paths.filter(p=>+p.pathType===3); if(mx.length) paths=mx; else paths.forEach(p=>p._noMixed=true); }
+  if(!paths.length) throw new Error('이 구간에서 조건에 맞는 경로를 찾지 못했어요.');
+  return paths.map(p=>({raw:p, info:p.info||{}, pathType:+p.pathType, segs:pathToSegs(p,S.db), noMixed:!!p._noMixed}));
+}
+$('#rGo').onclick=async()=>{
+  const out=$('#rOut');
+  if(P.points.some(p=>p.y==null)){ out.innerHTML='<div class="err">모든 지점을 검색(🔍)하거나 지도(📍)에서 골라 위치를 정해주세요.</div>'; return; }
+  const needKey=P.modes.some(m=>m!=='walk');
+  if(needKey && !S.key){ out.innerHTML='<div class="err">자동 길찾기에는 ODsay API 키가 필요해요. 설정 탭에서 넣거나, <b>직접 입력</b> 탭에서 구간을 넣어 요금을 계산하세요.</div>'; return; }
+  P.depart=timeToMin($('#rDepart').value)??timeToMin(nowHHMM());
+  out.innerHTML='<div class="card muted"><span class="spin"></span> 경로를 찾는 중…</div>';
+  $('#rGo').disabled=true;
+  try{
+    const legs=[];
+    for(let i=0;i<P.points.length-1;i++){
+      legs.push(await fetchLeg(P.points[i],P.points[i+1],P.modes[i]));
+    }
+    P.legs=legs; P.sel=legs.map(()=>0); P.selIdx=0;
+    renderRoute();
+  }catch(e){ out.innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+  finally{ $('#rGo').disabled=false; }
+};
+function transfersOf(o){ const i=o.info||{}; return Math.max(0,(+i.busTransitCount||0)+(+i.subwayTransitCount||0)-1); }
+function chainHTML(segs){
+  const rides=segs.filter(s=>s.mode!=='walk');
+  if(!rides.length) return '<span class="badge walk">🚶 도보</span>';
+  return rides.map(s=>`<span class="badge ${s.mode==='ext'?'ext':s.mode}">${s.mode==='bus'?'🚌':s.mode==='subway'?'🚇':'🚆'} ${esc(s.line)}</span>`).join('<span class="arr">›</span>');
+}
+function legSegsWithWaits(){
+  const all=[];
+  P.legs.forEach((alts,li)=>{
+    const o=alts[P.sel[li]]||alts[0];
+    let firstRide=true;
+    o.segs.forEach(s=>{
+      const c=Object.assign({},s);
+      if(li>0 && firstRide && c.mode!=='walk'){ c.wait=P.waits[li]; firstRide=false; }
+      else if(c.mode!=='walk') firstRide=false;
+      all.push(c);
+    });
+  });
+  return all;
+}
+function renderRoute(){
+  const out=$('#rOut'); if(!P.legs) return;
+  const sortKey=$('#rSort').value; const age=userAge();
+  if(P.legs.length===1){
+    let alts=P.legs[0].map((o,i)=>Object.assign(o,{_i:i, _fare:computeTrip(o.segs,age,opts(P.depart)).total}));
+    const sorted=[...alts];
+    if(sortKey==='time') sorted.sort((a,b)=>(+a.info.totalTime||0)-(+b.info.totalTime||0));
+    if(sortKey==='transfer') sorted.sort((a,b)=>transfersOf(a)-transfersOf(b) || (+a.info.totalTime||0)-(+b.info.totalTime||0));
+    if(sortKey==='fare') sorted.sort((a,b)=>a._fare-b._fare || (+a.info.totalTime||0)-(+b.info.totalTime||0));
+    let h='';
+    if(alts[0].noMixed) h+='<div class="hint" style="margin-bottom:12px">버스와 지하철을 섞은 경로가 없어 다른 경로를 보여드려요.</div>';
+    sorted.slice(0,8).forEach(o=>{
+      const sel=o._i===P.selIdx;
+      h+=`<div class="card pcard ${sel?'sel':''}" data-pi="${o._i}">
+        <div class="phead">
+          <div><div class="ptime">${o.info.totalTime||'?'}분</div><div class="muted small">환승 ${transfersOf(o)}회 · 도보 ${o.info.totalWalk||0}m</div></div>
+          <div class="pfare"><div class="big">${won(o._fare)}</div><div class="muted small">ODsay 성인요금 ${won(+o.info.payment||0)}</div></div>
+        </div>
+        <div class="chain">${chainHTML(o.segs)}</div>
+        ${sel?`<details open><summary>구간·요금 자세히</summary>${segListHTML(o.segs)}${fareSummaryHTML(o.segs,P.depart,'')}<button class="btn sm" data-edit="${o._i}">✎ 이 경로를 직접 입력 탭에서 고치기</button></details>`:''}
+      </div>`;
+    });
+    out.innerHTML=h;
+    drawMap((P.legs[0][P.selIdx]||{}).segs);
+    return;
+  }
+  // 환승지점이 있는 계획
+  let h='';
+  P.legs.forEach((alts,li)=>{
+    const a=P.points[li], b=P.points[li+1];
+    const o=alts[P.sel[li]]||alts[0];
+    const modeTxt=(MODE_OPTS.find(m=>m[0]===P.modes[li])||[])[1];
+    h+=`<div class="card"><div class="row" style="justify-content:space-between"><b>${li+1}구간 · ${esc(a.name)} → ${esc(b.name)}</b><span class="muted small">${esc(modeTxt||'')}</span></div>
+      ${o.noMixed?'<div class="hint">이 구간엔 버스+지하철 혼합 경로가 없어 다른 경로를 골랐어요.</div>':''}
+      ${alts.length>1?`<select data-leg="${li}" style="width:100%;margin-top:8px">${alts.slice(0,8).map((x,xi)=>`<option value="${xi}" ${xi===P.sel[li]?'selected':''}>${x.info.totalTime}분 · 환승 ${transfersOf(x)}회 · ${x.segs.filter(s=>s.mode!=='walk').map(s=>s.line).join(' → ')||'도보'}</option>`).join('')}</select>`:''}
+      <div class="chain">${chainHTML(o.segs)}</div>
+      <details><summary>구간 자세히</summary>${segListHTML(o.segs)}</details>
+    </div>`;
+  });
+  const segs=legSegsWithWaits();
+  const totalMin=P.legs.reduce((s,alts,li)=>s+(+(alts[P.sel[li]]||alts[0]).info.totalTime||0),0)+P.waits.slice(1,-1).reduce((a,b)=>a+(+b||0),0);
+  h+=`<div class="card"><div class="phead"><div><div class="ptime">총 ${totalMin}분</div><div class="muted small">환승지점 대기 포함</div></div></div></div>`;
+  h+=fareSummaryHTML(segs,P.depart,'전체 요금 (환승지점 포함)');
+  h+=`<button class="btn" data-editall="1" style="width:100%">✎ 전체 경로를 직접 입력 탭에서 고치기</button>`;
+  out.innerHTML=h;
+  drawMap(segs);
+}
+$('#rOut').addEventListener('click',e=>{
+  const ed=e.target.closest('[data-edit]');
+  if(ed){ e.stopPropagation(); loadManual(P.legs[0][+ed.dataset.edit].segs); goTab('manual'); return; }
+  if(e.target.closest('[data-editall]')){ loadManual(legSegsWithWaits()); goTab('manual'); return; }
+  if(e.target.closest('details')||e.target.closest('select')) return;
+  const c=e.target.closest('.pcard'); if(!c) return;
+  P.selIdx=+c.dataset.pi; renderRoute();
+});
+$('#rOut').addEventListener('change',e=>{ if(e.target.matches('select[data-leg]')){ P.sel[+e.target.dataset.leg]=+e.target.value; renderRoute(); } });
+$('#rSort').onchange=()=>renderRoute();
+
+/* ---------- 직접 입력 ---------- */
+let M=store.get('manual',[]);
+function regionOptions(sel){ return Object.entries(S.db.regions).map(([k,r])=>`<option value="${k}" ${k===sel?'selected':''}>${esc(r.name)}</option>`).join(''); }
+function typeOptions(region,sel){ const r=S.db.regions[region]||S.db.regions.other; return Object.entries(r.bus).map(([k,t])=>`<option value="${k}" ${k===sel?'selected':''}>${esc(t.label)}</option>`).join(''); }
+function loadManual(segs){
+  M=[]; let pend=0;
+  segs.forEach(s=>{
+    if(s.mode==='walk'){ pend+=+s.min||0; return; }
+    if(s.mode!=='bus'&&s.mode!=='subway') return;
+    const w=(s.wait!=null?+s.wait:(M.length?+S.wait||0:0))+(M.length?pend:0);
+    M.push({mode:s.mode, region:s.region, type:s.type||'', km:+(+s.km||0).toFixed(1), min:+s.min||0, wait:M.length?w:0, line:s.line||'', from:s.from||'', to:s.to||''});
+    pend=0;
+  });
+  $('#mDepart').value=P.depart!=null?String(Math.floor(P.depart/60)%24).padStart(2,'0')+':'+String(P.depart%60).padStart(2,'0'):nowHHMM();
+  renderManual();
+}
+function renderManual(){
+  store.set('manual',M);
+  if(!M.length){ $('#mRows').innerHTML='<p class="muted" style="text-align:center;padding:16px 0 4px">아래 버튼으로 탄 순서대로 구간을 추가하세요.</p>'; $('#mOut').innerHTML=''; return; }
+  $('#mRows').innerHTML=M.map((r,i)=>`<div class="mrow" data-i="${i}">
+    <div class="num"><span>${i+1}. ${r.mode==='bus'?'🚌 버스':'🚇 지하철'}</span><span><button class="btn sm ghost" data-a="up" ${i===0?'disabled':''}>▲</button><button class="btn sm ghost" data-a="del">삭제</button></span></div>
+    <label class="f c2">지역<select data-k="region">${regionOptions(r.region)}</select></label>
+    ${r.mode==='bus'?`<label class="f c2">버스 종류<select data-k="type">${typeOptions(r.region,r.type)}</select></label>`:`<label class="f c2">노선<input data-k="line" value="${esc(r.line)}" placeholder="예: 2호선"></label>`}
+    <label class="f c2">${r.mode==='bus'?'노선번호':'승차역→하차역'}<input data-k="${r.mode==='bus'?'line':'from'}" value="${esc(r.mode==='bus'?r.line:r.from)}" placeholder="${r.mode==='bus'?'예: 7016':'예: 강남'}"></label>
+    <label class="f">거리(km)<input type="number" step="0.1" min="0" data-k="km" value="${r.km}"></label>
+    <label class="f">탑승(분)<input type="number" min="0" data-k="min" value="${r.min}"></label>
+    ${i>0?`<label class="f c2">타기 전 도보+대기(분)<input type="number" min="0" data-k="wait" value="${r.wait}"></label>`:'<div class="c2"></div>'}
+  </div>`).join('');
+  computeManual();
+}
+function computeManual(){
+  if(!M.length){ $('#mOut').innerHTML=''; return; }
+  const depart=timeToMin($('#mDepart').value)??timeToMin(nowHHMM());
+  const segs=M.map((r,i)=>({mode:r.mode, region:r.region, type:r.type, km:+r.km||0, min:+r.min||0, wait:i?(+r.wait||0):0, line:r.line, from:r.from}));
+  $('#mOut').innerHTML=fareSummaryHTML(segs,depart,'계산 결과');
+}
+function addManual(mode){
+  const prev=M[M.length-1];
+  const region=prev?prev.region:'seoul';
+  M.push({mode, region, type: mode==='bus'?busTypeOf(region,'',S.db):'', km:mode==='bus'?5:8, min:mode==='bus'?15:15, wait:M.length?(+S.wait||5):0, line:'', from:''});
+  renderManual();
+}
+$('#mAddBus').onclick=()=>addManual('bus');
+$('#mAddSub').onclick=()=>addManual('subway');
+$('#mClear').onclick=()=>{ if(confirm('입력한 구간을 모두 지울까요?')){ M=[]; renderManual(); } };
+$('#mDepart').onchange=computeManual;
+$('#mRows').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-a]'); if(!b) return;
+  const i=+b.closest('.mrow').dataset.i;
+  if(b.dataset.a==='del') M.splice(i,1);
+  if(b.dataset.a==='up' && i>0) [M[i-1],M[i]]=[M[i],M[i-1]];
+  renderManual();
+});
+$('#mRows').addEventListener('change',e=>{
+  const el=e.target; const k=el.dataset.k; if(!k) return;
+  const i=+el.closest('.mrow').dataset.i;
+  M[i][k]= ['km','min','wait'].includes(k) ? Math.max(0,+el.value||0) : el.value;
+  if(k==='region'){ M[i].type=busTypeOf(M[i].region,M[i].type,S.db); renderManual(); return; }
+  store.set('manual',M); computeManual();
+});
+
+/* ---------- 요금표 ---------- */
+let tDraft=null;
+function renderTable(){
+  const sel=$('#tRegion');
+  if(!sel.options.length) sel.innerHTML=regionOptions('seoul');
+  const k=sel.value; const r=S.db.regions[k];
+  tDraft=clone(r);
+  const row=(label,f,path,est,extra)=>`<tr><td>${esc(label)} ${est?'<span class="badge est">추정</span>':''}${extra?`<div class="muted small">${esc(extra)}</div>`:''}</td>${f.map((v,j)=>`<td class="n"><input type="number" step="10" min="0" data-p="${path}" data-j="${j}" value="${v}"></td>`).join('')}</tr>`;
+  let h='<div class="tblwrap ftbl"><table><thead><tr><th>구분</th><th class="n">일반</th><th class="n">청소년</th><th class="n">어린이</th></tr></thead><tbody>';
+  Object.entries(r.bus).forEach(([bk,t])=>{ h+=row('🚌 '+t.label, t.f, 'bus.'+bk, t.est, t.dist?`거리비례 (기본 ${t.dist}km)`:''); });
+  if(r.subway){
+    h+=row('🚇 '+r.subway.label+(r.subway.zone?` (~${r.subway.zone.km}km)`:''), r.subway.f, 'subway', r.subway.est, r.model==='capital'?'10km 초과 5km마다 +100/80/50원':'');
+    if(r.subway.zone) h+=row(`🚇 ${r.subway.label} (${r.subway.zone.km}km 초과)`, r.subway.zone.f, 'zone', r.subway.est);
+  }else{
+    h+=`<tr><td colspan="4" class="muted small">🚇 이 지역에 도시철도 요금이 없어 ${esc(S.db.regions[subwayRegion(k,S.db)].name)} 기준을 씁니다.</td></tr>`;
+  }
+  h+='</tbody></table></div>';
+  h+=`<div class="muted small" style="margin-top:10px">
+    <div>• 환승 인정: ${r.window}분${r.nightWindow?` (21~07시 ${r.nightWindow}분)`:''} 이내, 최대 ${r.maxTransfers}회 ${r.transferEst?'<span class="badge est">추정</span>':''}</div>
+    <div>• 경로: 지하철 ${r.seniorSubwayFree?`만 ${r.seniorSubwayFree}세 이상 무임`:'유료'} · 버스 ${r.seniorBusFree?`만 ${r.seniorBusFree}세 이상 무료`:'유료'} ${r.seniorEst?'<span class="badge est">추정</span>':''}</div>
+    <div>• 만 6세 미만은 보호자 동반 시 무료</div>
+    <div style="margin-top:6px">${esc(r.note||'')}</div>
+    <div style="margin-top:6px">출처: ${esc(r.src||'-')}</div>
+  </div>`;
+  $('#tBody').innerHTML=h;
+  $('#tFoot').innerHTML=`요금 데이터 기준일 <b>${esc(S.db.version)}</b> · 교통카드 기준. <span class="badge est">추정</span> 표시는 공식 자료로 끝까지 확인하지 못한 값이에요. 숫자를 고치고 <b>수정 저장</b>을 누르면 이 브라우저에 저장돼 모든 계산에 반영됩니다.`;
+}
+$('#tRegion').onchange=renderTable;
+$('#tBody').addEventListener('input',e=>{
+  const el=e.target; if(!el.dataset.p) return;
+  const v=Math.max(0,+el.value||0), j=+el.dataset.j, p=el.dataset.p;
+  if(p==='subway') tDraft.subway.f[j]=v;
+  else if(p==='zone') tDraft.subway.zone.f[j]=v;
+  else { const bk=p.split('.')[1]; tDraft.bus[bk].f[j]=v; }
+});
+$('#tSave').onclick=()=>{ S.db.regions[$('#tRegion').value]=tDraft; store.set('db',S.db); renderTable(); rerenderAll(); toast('저장했어요'); };
+$('#tReset').onclick=()=>{ if(!confirm('모든 지역의 요금을 기본값으로 되돌릴까요?')) return; S.db=clone(FARE_DB_DEFAULT); store.del('db'); renderTable(); rerenderAll(); toast('기본값으로 복원했어요'); };
+
+/* ---------- 설정 ---------- */
+$('#apiKey').value=S.key;
+$('#apiKey').addEventListener('change',e=>{ S.key=e.target.value.trim(); store.set('key',S.key); renderKeyWarn(); });
+$('#keyShow').onclick=()=>{ const i=$('#apiKey'); i.type=i.type==='password'?'text':'password'; };
+$('#keyTest').onclick=async()=>{
+  S.key=$('#apiKey').value.trim(); store.set('key',S.key); renderKeyWarn();
+  const m=$('#keyMsg'); m.innerHTML='<span class="spin"></span> 확인 중…';
+  try{ const r=await odsay('searchStation',{stationName:'서울역'}); m.innerHTML=`<span style="color:var(--bus)">✓ 연결됐어요 (정류장 ${((r&&r.station)||[]).length}건 확인)</span>`; }
+  catch(e){ m.innerHTML=`<span style="color:#c53030">✕ ${esc(e.message)}</span>`; }
+};
+$('#birth').value=S.birth;
+$('#birth').addEventListener('change',e=>{ S.birth=e.target.value; store.set('birth',S.birth); refreshAge(); rerenderAll(); });
+$('#birthClear').onclick=()=>{ S.birth=''; store.set('birth',''); $('#birth').value=''; refreshAge(); rerenderAll(); };
+$('#defWait').value=S.wait;
+$('#defWait').addEventListener('change',e=>{ S.wait=Math.max(0,+e.target.value||0); store.set('wait',S.wait); rerenderAll(); });
+$('#dbApply').onclick=()=>{
+  try{ const j=JSON.parse($('#dbJson').value); if(!j.regions||!j.regions.seoul) throw new Error('regions.seoul 이 필요해요'); S.db=j; store.set('db',S.db); $('#dbMsg').textContent='✓ 적용했어요'; rerenderAll(); }
+  catch(e){ $('#dbMsg').textContent='✕ '+e.message; }
+};
+$('#dbReset').onclick=()=>{ S.db=clone(FARE_DB_DEFAULT); store.del('db'); $('#dbJson').value=JSON.stringify(S.db,null,1); $('#dbMsg').textContent='✓ 기본값 복원'; rerenderAll(); };
+function renderKeyWarn(){
+  $('#keyWarn').innerHTML = S.key ? '' : `<div class="card" style="background:var(--warn-bg);border-color:transparent"><b style="color:var(--warn)">자동 길찾기를 쓰려면 ODsay 키가 필요해요</b><div class="muted small" style="margin-top:4px">무료 키를 받아 <a href="#" id="toSet">설정</a>에 넣어주세요. 키 없이도 <a href="#" id="toMan">직접 입력</a> 탭에서 구간별 요금은 계산할 수 있어요.</div></div>`;
+  const a=$('#toSet'), b=$('#toMan');
+  if(a) a.onclick=e=>{e.preventDefault();goTab('settings');};
+  if(b) b.onclick=e=>{e.preventDefault();goTab('manual');};
+}
+function toast(t){ const d=document.createElement('div'); d.textContent=t; d.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#14181f;color:#fff;padding:9px 16px;border-radius:999px;font-size:14px;z-index:2000'; document.body.appendChild(d); setTimeout(()=>d.remove(),1600); }
+function rerenderAll(){ if(P.legs) renderRoute(); computeManual(); }
+
+/* ---------- 시작 ---------- */
+$('#rDepart').value=nowHHMM();
+$('#mDepart').value=nowHHMM();
+refreshAge(); renderKeyWarn(); renderStops(); renderManual(); drawMap();
+</script>
+</body>
+</html>
