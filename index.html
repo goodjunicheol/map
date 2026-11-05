@@ -615,21 +615,26 @@ function kakaoRouteToSegs(route, db){
     if(t==='WALKING'){ segs.push({mode:'walk', min, m:dist}); continue; }
     if(t==='SUBWAY'){
       const region=y0!=null?detectRegion(y0,x0):'seoul';
-      segs.push({mode:'subway', region, line:(veh[0]&&veh[0].name)||'지하철', km:dist/1000, min, from, to, stops:Math.max(0,stops.length-1), coords:pts});
+      segs.push({mode:'subway', region, line:(veh[0]&&veh[0].name)||'지하철', km:dist/1000, min, from, to, stops:Math.max(0,stops.length-1), coords:pts, next:stops.length>1?stops[1].name:'', guidance:p.guidance||''});
       continue;
     }
     if(t==='BUS'){
       const region=y0!=null?detectRegion(y0,x0):'other';
       const v=veh[0]||{};
-      const names=veh.map(x=>x.name).filter(Boolean);
+      // 같은 번호가 여러 개면 서로 다른 노선(행선지·운행 지역)일 수 있어서 개수를 남긴다
+      const cnt={};
+      veh.forEach(x=>{ if(x.name==null) return; const n=String(x.name).trim(); if(n!=='') cnt[n]=(cnt[n]||0)+1; });
+      const names=Object.keys(cnt).map(n=>cnt[n]>1?`${n}(${cnt[n]}개 노선)`:n);
+      const dupNames=Object.keys(cnt).filter(n=>cnt[n]>1);
+      const dirInfo={next:stops.length>1?stops[1].name:'', guidance:p.guidance||'', dupNames};
       if(isIntercityBus(v.type, v.name)){
         segs.push({mode:'ext', kind:'intercity', busLabel:v.type||'', line:names.slice(0,3).join(', ')||'시외버스', km:dist/1000, min, from, to,
-          stops:Math.max(0,stops.length-1), coords:pts, fare:null});
+          stops:Math.max(0,stops.length-1), coords:pts, fare:null, ...dirInfo});
         continue;
       }
       segs.push({mode:'bus', region, type:mapKakaoBusType(region, v.type, v.name, db), busLabel:v.type||'',
         line:names.slice(0,3).join(', ')+(names.length>3?' 외':'') || '버스', km:dist/1000, min, from, to,
-        stops:Math.max(0,stops.length-1), coords:pts});
+        stops:Math.max(0,stops.length-1), coords:pts, ...dirInfo});
       continue;
     }
     segs.push({mode:'ext', kind:'other', line:(veh[0]&&veh[0].name)||p.guidance||'기타 구간', from, to, min, coords:pts, fare:null});
@@ -734,13 +739,20 @@ function renderAgeTable(segs, depart){
   h+='</tbody></table></div>';
   return h;
 }
+function dirHTML(s){
+  let h='';
+  if(s.next && s.next!==s.to) h+=`<small>➜ 방향: <b>${esc(s.from||'')}</b>에서 타서 다음 정류장이 <b>${esc(s.next)}</b>인 쪽</small>`;
+  if(s.guidance) h+=`<small>카카오 안내: ${esc(s.guidance)}</small>`;
+  if(s.dupNames && s.dupNames.length) h+=`<small style="color:var(--warn)">⚠ ${s.dupNames.map(n=>esc(n)+'번').join(', ')}은 같은 번호 노선이 여러 개예요. 정류장 안내판이나 버스 앞 행선지가 <b>${esc(s.to||'하차 정류장')}</b> 방향인지 확인하세요.</small>`;
+  return h;
+}
 function segListHTML(segs){
   return segs.map(s=>{
     if(s.mode==='walk') return `<div class="seg"><div class="ic">🚶</div><div class="tx">도보 ${s.m?Math.round(s.m)+'m · ':''}${s.min}분</div></div>`;
-    if(s.mode==='ext') return `<div class="seg"><div class="ic">${s.kind==='intercity'?'🚍':'🚆'}</div><div class="tx"><b>${esc(s.line)}</b> <span class="badge ext">${s.kind==='intercity'?'시외·고속 · 환승 안 됨':'별도 요금'}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''}${s.km?' · '+(+s.km).toFixed(1)+'km':''} · ${s.min}분${s.busLabel?' · 카카오 분류: '+esc(s.busLabel):''}</small></div></div>`;
+    if(s.mode==='ext') return `<div class="seg"><div class="ic">${s.kind==='intercity'?'🚍':'🚆'}</div><div class="tx"><b>${esc(s.line)}</b> <span class="badge ext">${s.kind==='intercity'?'시외·고속 · 환승 안 됨':'별도 요금'}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''}${s.km?' · '+(+s.km).toFixed(1)+'km':''} · ${s.min}분${s.busLabel?' · 카카오 분류: '+esc(s.busLabel):''}</small>${dirHTML(s)}</div></div>`;
     const r=S.db.regions[s.region]||S.db.regions.other;
     const tl = s.mode==='bus' ? (r.bus[busTypeOf(s.region,s.type,S.db)]||{}).label : (S.db.regions[subwayRegion(s.region,S.db)].subway||{}).label;
-    return `<div class="seg"><div class="ic">${s.mode==='bus'?'🚌':'🚇'}</div><div class="tx"><b>${esc(s.line||'')}</b> <span class="badge ${s.mode}">${esc(r.name)} · ${esc(tl||'')}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''} · ${(+s.km||0).toFixed(1)}km${s.stops?' · '+s.stops+'개 정류장':''}${s.min?' · '+s.min+'분':''}${s.busLabel?' · 카카오 분류: '+esc(s.busLabel):''}</small></div></div>`;
+    return `<div class="seg"><div class="ic">${s.mode==='bus'?'🚌':'🚇'}</div><div class="tx"><b>${esc(s.line||'')}</b> <span class="badge ${s.mode}">${esc(r.name)} · ${esc(tl||'')}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''} · ${(+s.km||0).toFixed(1)}km${s.stops?' · '+s.stops+'개 정류장':''}${s.min?' · '+s.min+'분':''}${s.busLabel?' · 카카오 분류: '+esc(s.busLabel):''}</small>${dirHTML(s)}</div></div>`;
   }).join('');
 }
 function fareSummaryHTML(segs, depart, title){
@@ -1012,7 +1024,9 @@ async function fetchLeg(a,b,mode,ctx){
   let noMatch=false;
   if(MODE_TYPE[mode]){
     const f=routes.filter(r=>r.kType===MODE_TYPE[mode]);
-    if(f.length) routes=f; else noMatch=true;
+    if(f.length) routes=f;
+    else if(mode==='bus' && d>=4000) throw routeErr('시내버스만으로 가는 경로가 없어요.','NO_BUS_ONLY',true);
+    else noMatch=true;
   }
   return {a,b,alts:routes, landing:(j.properties&&j.properties.landingURL)||null, cached:!!j._cached, noMatch};
 }
@@ -1034,7 +1048,7 @@ async function nearPlaces(p, query, radius){
 async function midStop(a,b){
   const m={x:(a.x+b.x)/2, y:(a.y+b.y)/2};
   const lists=await Promise.all(['버스정류장','버스터미널','역'].map(q=>nearPlaces(m,q,15000).catch(()=>[])));
-  const cand=lists.flat().filter(c=>hav(c,a)>1500 && hav(c,b)>1500);
+  const cand=lists.flat().filter(c=>/교통/.test(c.cat) && hav(c,a)>1500 && hav(c,b)>1500);
   cand.sort((x,y)=>x.dist-y.dist);
   return cand[0]||null;
 }
@@ -1050,7 +1064,7 @@ async function solveLeg(a,b,mode,ctx,depth){
     if(mode==='auto' && d>=60000 && !ctx.usedTerminal){
       ctx.progress('거리가 멀어 근처 버스터미널을 찾는 중…');
       const [ta,tb]=await Promise.all([nearPlaces(a,'버스터미널'),nearPlaces(b,'버스터미널')]);
-      const T1=ta.find(t=>/터미널/.test(t.name)), T2=tb.find(t=>/터미널/.test(t.name));
+      const isTerm=t=>/터미널/.test(t.name) && /교통/.test(t.cat); const T1=ta.find(isTerm), T2=tb.find(isTerm);
       if(T1 && T2 && T1.name!==T2.name){
         ctx.usedTerminal=true; ctx.terminal=T1.name+' → '+T2.name;
         const out=[];
@@ -1104,6 +1118,9 @@ function chainHTML(segs){
 }
 const MODE_NAME={bus:'시내버스만 타는', subway:'지하철만 타는', mixed:'시내버스와 지하철을 섞은'};
 function noMatchHint(mode){ return `<div class="hint">카카오가 ${MODE_NAME[mode]||''} 경로를 주지 않아 다른 경로를 보여드려요.</div>`; }
+function ruralHint(segs){
+  return segs.some(s=>/농어촌/.test(s.busLabel||'')) ? '<div class="hint" style="margin-top:8px">농어촌버스는 배차가 1~2시간씩인 경우가 많아요. 시간은 갈아탈 때마다 대기 '+(+S.wait||0)+'분으로 잡은 값이라, 실제로는 훨씬 더 걸리거나 막차가 끊길 수 있어요.</div>' : '';
+}
 function kakaoBtn(leg,label){ return leg.landing?`<a class="btn sm" href="${esc(leg.landing)}" target="_blank" rel="noopener">${label||'카카오맵에서 보기 ↗'}</a>`:''; }
 function legWait(leg,k){ if(k===0) return 0; return leg.firstOfUser ? (+P.waits[leg.userIdx]||0) : (+S.wait||0); }
 function legSegsWithWaits(){
@@ -1153,6 +1170,7 @@ function renderRoute(){
           <div class="pfare"><div class="big">${won(o._fare)}</div><div class="muted small">${t.hasExternal?'+ 시외 요금 별도':'카카오 표기 '+won(+o.info.payment||0)}</div></div>
         </div>
         <div class="chain">${chainHTML(o.segs)}</div>
+        ${sel?ruralHint(o.segs):''}
         ${sel?`<details open><summary>구간·요금 자세히</summary>${segListHTML(o.segs)}${fareSummaryHTML(o.segs,P.depart,'')}<button class="btn sm" data-edit="1">✎ 이 경로를 직접 입력 탭에서 고치기</button></details>`:''}
       </div>`;
     });
@@ -1174,6 +1192,7 @@ function renderRoute(){
       <div class="pfare"><div class="big">${won(trip.total)}</div><div class="muted small">${trip.hasExternal?'+ 시외 요금 별도':'만 '+trip.age+'세 기준'}</div></div>
     </div>
     <div class="chain">${chainHTML(segs)}</div>
+    ${ruralHint(segs)}
     <details open><summary>구간·요금 자세히</summary>`;
   P.legs.forEach((leg,k)=>{
     const o=leg.alts[P.sel[k]]||leg.alts[0];
