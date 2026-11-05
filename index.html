@@ -177,6 +177,7 @@ a{color:var(--pri)}
       </select></label>
     </div>
     <div style="margin-top:12px"><button class="btn primary" id="rGo">경로 찾기</button></div>
+    <div id="usageLine" class="muted small" style="margin-top:8px;text-align:center"></div>
     <div id="pickHint"></div>
   </div>
   <div id="map"></div>
@@ -226,19 +227,37 @@ a{color:var(--pri)}
     </div>
   </div>
   <div class="card">
-    <b>ODsay API 키 (자동 길찾기용)</b>
+    <b>카카오 길찾기 연결</b>
+    <p class="muted small" style="margin:4px 0 8px">카카오 대중교통 길찾기는 브라우저에서 바로 부를 수 없어서(CORS), 무료 중계 서버(Cloudflare Worker)를 거쳐야 해요. 처음 한 번만 설정하면 됩니다.</p>
+    <label class="f">중계 서버 주소 (Worker URL)<input id="proxyUrl" type="url" placeholder="https://kakao-proxy.내이름.workers.dev" autocomplete="off"></label>
     <div class="row" style="margin-top:8px">
-      <input id="apiKey" type="password" placeholder="ODsay LAB URI 플랫폼 키" style="flex:1" autocomplete="off">
-      <button class="btn sm" id="keyShow">보기</button>
       <button class="btn sm" id="keyTest">연결 테스트</button>
     </div>
     <div id="keyMsg" class="small" style="margin-top:6px"></div>
-    <ol class="steps muted small">
-      <li><a href="https://lab.odsay.com" target="_blank" rel="noopener">lab.odsay.com</a>에 가입하고 애플리케이션을 등록합니다.</li>
-      <li>애플리케이션의 플랫폼 설정에서 <b>URI</b>를 고르고, 이 파일을 올린 주소(예: <code>https://내아이디.github.io</code>)를 등록합니다.</li>
-      <li>발급된 키를 위에 붙여넣습니다. 키는 이 브라우저에만 저장됩니다.</li>
-    </ol>
-    <p class="muted small" style="margin:4px 0 0">파일을 더블클릭해 바로 열면(file://) 주소가 없어서 ODsay가 거절할 수 있어요. 이 경우 GitHub Pages 같은 곳에 올려서 쓰거나, 키 없이 <b>직접 입력</b> 탭을 쓰면 됩니다.</p>
+    <div id="usageBox" class="small muted" style="margin-top:4px"></div>
+    <details style="margin-top:10px">
+      <summary>중계 서버 만드는 법 (5분)</summary>
+      <ol class="steps muted small">
+        <li><a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">Cloudflare</a>에 무료로 가입합니다.</li>
+        <li><b>Workers &amp; Pages → Create → Worker</b>에서 이름을 <code>kakao-proxy</code>로 짓고 <b>Deploy</b>를 누릅니다.</li>
+        <li><b>Edit code</b>를 눌러 기존 코드를 지우고, 아래 코드를 복사해 붙여넣은 뒤 <b>Deploy</b>합니다. 사이트 주소(<code>ALLOWED_ORIGINS</code>)는 지금 이 페이지 주소로 자동으로 채워져 있어요.</li>
+        <li>Worker의 <b>Settings → Variables and Secrets → Add</b>에서 종류는 <b>Secret</b>, 이름은 <code>KAKAO_REST_KEY</code>, 값은 카카오 REST API 키를 넣고 저장합니다.</li>
+        <li>Worker 주소(<code>https://kakao-proxy.….workers.dev</code>)를 복사해 위 칸에 넣고 <b>연결 테스트</b>를 누릅니다.</li>
+      </ol>
+      <textarea id="workerCode" rows="8" readonly spellcheck="false"></textarea>
+      <div class="row" style="margin-top:6px"><button class="btn sm" id="copyWorker">코드 복사</button><span id="copyMsg" class="small muted"></span></div>
+      <p class="muted small" style="margin:6px 0 0">키는 Cloudflare에만 저장돼서 사이트를 공개해도 노출되지 않아요. Worker는 내 사이트에서 온 요청만 받아요.</p>
+    </details>
+    <details style="margin-top:8px">
+      <summary>카카오 키·한도 안내</summary>
+      <ol class="steps muted small">
+        <li><a href="https://developers.kakao.com/console/app" target="_blank" rel="noopener">developers.kakao.com</a>에서 애플리케이션을 추가합니다.</li>
+        <li>앱의 <b>[카카오맵] → [사용 설정]</b> 상태를 <b>ON</b>으로 바꿉니다.</li>
+        <li><b>REST API 키</b>를 복사해 Worker의 <code>KAKAO_REST_KEY</code>에 넣습니다.</li>
+      </ol>
+      <p class="muted small" style="margin:4px 0 0">무료 한도: 대중교통 길찾기 하루 1,000회, 장소 검색 하루 100,000회. 유료 설정을 직접 켜지 않으면 요금이 나가지 않아요. Cloudflare Worker 무료 요금제로도 충분해요.</p>
+      <label class="f" style="margin-top:8px">(선택) 중계 서버 없이 장소 검색만 쓸 REST API 키<input id="apiKey" type="password" placeholder="비워둬도 돼요" autocomplete="off"></label>
+    </details>
   </div>
   <div class="card">
     <b>계산 옵션</b>
@@ -404,7 +423,6 @@ function detectRegion(lat,lng){
   for(const [k,a,b,c,d] of REGION_BOXES){ if(lat>=a&&lat<=b&&lng>=c&&lng<=d) return k; }
   return 'other';
 }
-const SUBWAY_CITY = {1000:'seoul',7000:'busan',4000:'daegu',3000:'daejeon',6000:'gwangju'};
 
 function ageCat(age){
   age=+age;
@@ -546,51 +564,65 @@ const REP_AGES=[
   {label:'경로 (만 70세 이상)', age:72}
 ];
 
-/* ODsay 결과 → 구간 */
-function mapBusType(region, odType, busNo, db){
-  const r=db.regions[region]||db.regions.other; const no=String(busNo||'');
+/* 카카오 대중교통 경로 → 구간 */
+function mapKakaoBusType(region, label, name, db){
+  const r=db.regions[region]||db.regions.other;
   const has=k=>!!r.bus[k];
-  if(/^N/i.test(no) && has('night')) return 'night';
-  if(/^M/i.test(no) && has('mbus')) return 'mbus';
-  if(/순환/.test(no) && has('circ')) return 'circ';
-  const t=+odType;
-  switch(region){
-    case 'seoul':
-      if(t===3) return 'village'; if(t===13) return 'circular'; if([4,5,14].includes(t)) return 'wide'; return 'trunk';
-    case 'gyeonggi':
-      if(t===3) return 'village'; if(t===2) return 'seat'; if([4,5,14,15,22].includes(t)) return 'express'; return 'general';
-    case 'incheon':
-      if(t===3||t===12) return 'branch'; if(t===2) return 'seat'; if([4,5,14].includes(t)) return 'wide'; if(t===6) return 'brt'; return 'trunk';
-    default:
-      if(t===3 && has('village')) return 'village';
-      if([2,4,15,22,26].includes(t) && has('express')) return 'express';
-      return Object.keys(r.bus)[0];
+  const L=String(label||''), N=String(name||'');
+  const first=Object.keys(r.bus)[0];
+  if((/심야/.test(L)||/^N\d/i.test(N)) && has('night')) return 'night';
+  if((/광역급행|M버스/.test(L)||/^M\d/i.test(N)) && has('mbus')) return 'mbus';
+  if(/마을/.test(L)) return has('village') ? 'village' : (has('branch') ? 'branch' : first);
+  if(/순환/.test(L)) return has('circular') ? 'circular' : has('circ') ? 'circ' : first;
+  if(/BRT|간선급행/.test(L) && has('brt')) return 'brt';
+  if(/직행좌석|광역|공항/.test(L)){
+    if(has('wide')) return 'wide';
+    if(has('express')) return 'express';
+    return first;
   }
+  if(/좌석/.test(L)){
+    if(has('seat')) return 'seat';
+    if(has('express')) return 'express';
+    return first;
+  }
+  if(/급행/.test(L) && has('express')) return 'express';
+  if(/지선/.test(L) && has('branch')) return 'branch';
+  if(/간선|지선/.test(L) && has('trunk')) return 'trunk';
+  if(has('general')) return 'general';
+  return first;
 }
-function pathToSegs(path, db){
+function kakaoRouteToSegs(route, db){
   const segs=[];
-  for(const sp of (path.subPath||[])){
-    const tt=+sp.trafficType;
-    const lane=(sp.lane&&sp.lane[0])||{};
-    const coords=(sp.passStopList&&sp.passStopList.stations||[]).map(s=>[+s.y,+s.x]);
-    if(tt===3){ segs.push({mode:'walk', min:+sp.sectionTime||0, m:+sp.distance||0}); continue; }
-    if(tt===1){
-      let region=SUBWAY_CITY[lane.subwayCityCode] || detectRegion(sp.startY, sp.startX);
-      segs.push({mode:'subway', region, line:lane.name||'지하철', km:(+sp.distance||0)/1000, min:+sp.sectionTime||0,
-        from:sp.startName, to:sp.endName, stops:+sp.stationCount||0, coords});
+  for(const st of (route.steps||[])){
+    const p=st.properties||{};
+    const pts=((st.path&&st.path.points)||[]).map(q=>[+q[1],+q[0]]);
+    const min=Math.max(0,Math.round((+p.time||0)/60));
+    const dist=+p.distance||0;
+    const stops=p.stops||[];
+    const veh=p.vehicles||[];
+    const from=stops.length?stops[0].name:'', to=stops.length?stops[stops.length-1].name:'';
+    const y0=pts.length?pts[0][0]:null, x0=pts.length?pts[0][1]:null;
+    const t=String(p.type||'').toUpperCase();
+    if(t==='WALKING'){ segs.push({mode:'walk', min, m:dist}); continue; }
+    if(t==='SUBWAY'){
+      const region=y0!=null?detectRegion(y0,x0):'seoul';
+      segs.push({mode:'subway', region, line:(veh[0]&&veh[0].name)||'지하철', km:dist/1000, min, from, to, stops:Math.max(0,stops.length-1), coords:pts});
       continue;
     }
-    if(tt===2){
-      const region=detectRegion(sp.startY, sp.startX);
-      const type=mapBusType(region, lane.type, lane.busNo, db);
-      segs.push({mode:'bus', region, type, odType:lane.type, line:lane.busNo||'버스', km:(+sp.distance||0)/1000, min:+sp.sectionTime||0,
-        from:sp.startName, to:sp.endName, stops:+sp.stationCount||0, coords});
+    if(t==='BUS'){
+      const region=y0!=null?detectRegion(y0,x0):'other';
+      const v=veh[0]||{};
+      const names=veh.map(x=>x.name).filter(Boolean);
+      segs.push({mode:'bus', region, type:mapKakaoBusType(region, v.type, v.name, db), busLabel:v.type||'',
+        line:names.slice(0,3).join(', ')+(names.length>3?' 외':'') || '버스', km:dist/1000, min, from, to,
+        stops:Math.max(0,stops.length-1), coords:pts});
       continue;
     }
-    segs.push({mode:'ext', line:(lane.name||lane.busNo||'시외·기차 구간'), from:sp.startName, to:sp.endName, min:+sp.sectionTime||0, coords});
+    segs.push({mode:'ext', line:(veh[0]&&veh[0].name)||p.guidance||'기타 구간', from, to, min, coords:pts});
   }
   return segs;
 }
+const KAKAO_TYPE_TO_PATH={BUS:2, SUBWAY:1, BUS_AND_SUBWAY:3};
 /*ENGINE_END*/
 
 /* =================== UI =================== */
@@ -605,7 +637,8 @@ const store={
 };
 const clone=o=>JSON.parse(JSON.stringify(o));
 const S={
-  key: store.get('key',''),
+  key: store.get('kkey',''),
+  proxy: store.get('proxy',''),
   birth: store.get('birth',''),
   ageNum: store.get('age',30),
   wait: store.get('wait',5),
@@ -747,33 +780,72 @@ async function reverseName(lat,lng){
   }catch(e){ return null; }
 }
 async function searchPlaces(q){
-  const out=[]; const tasks=[];
-  if(S.key){
-    tasks.push(odsay('searchStation',{stationName:q}).then(r=>{
-      (r.station||[]).slice(0,6).forEach(s=>out.push({name:s.stationName+(+s.stationClass===2?'역':''), sub:[s.cityName,s.laneName||(+s.stationClass===1?'버스정류장':'')].filter(Boolean).join(' · '), x:+s.x, y:+s.y, k:'odsay'}));
-    }).catch(()=>{}));
+  // 카카오 키가 있으면 카카오 장소검색(정확도 높음), 없거나 실패하면 OpenStreetMap
+  if(hasKakao()){
+    try{
+      const j=await kakao('v2/local/search/keyword.json',{query:q,size:10},false);
+      const docs=(j&&j.documents)||[];
+      if(docs.length) return docs.map(d=>({name:d.place_name, sub:[d.category_group_name||d.category_name&&d.category_name.split('>').pop().trim(), d.road_address_name||d.address_name].filter(Boolean).join(' · '), x:+d.x, y:+d.y, k:'kakao'}));
+    }catch(e){ /* OSM으로 대체 */ }
   }
-  tasks.push(fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=kr&limit=6&accept-language=ko&q=${encodeURIComponent(q)}`)
-    .then(r=>r.json()).then(arr=>{ (arr||[]).forEach(p=>{ const parts=(p.display_name||'').split(',').map(s=>s.trim()); out.push({name:parts[0], sub:parts.slice(1,4).join(' '), x:+p.lon, y:+p.lat, k:'osm'}); }); }).catch(()=>{}));
-  await Promise.all(tasks);
-  return out;
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=kr&limit=8&accept-language=ko&q=${encodeURIComponent(q)}`);
+    const arr=await r.json();
+    return (arr||[]).map(p=>{ const parts=(p.display_name||'').split(',').map(s=>s.trim()); return {name:parts[0], sub:parts.slice(1,4).join(' '), x:+p.lon, y:+p.lat, k:'osm'}; });
+  }catch(e){ return []; }
 }
 
-/* ---------- ODsay ---------- */
-async function odsay(api, params){
-  if(!S.key) throw new Error('설정 탭에서 ODsay API 키를 먼저 넣어주세요.');
-  const qs=new URLSearchParams(Object.assign({},params,{apiKey:S.key, lang:0}));
+/* ---------- 카카오 API ---------- */
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+function usage(){ const u=store.get('usage',null); return (u&&u.d===todayStr())?u:{d:todayStr(),route:0,search:0}; }
+function bumpUsage(kind){ const u=usage(); u[kind]=(u[kind]||0)+1; store.set('usage',u); renderUsage(); }
+function renderUsage(){
+  const u=usage(); const t=`오늘 사용: 길찾기 ${u.route.toLocaleString()} / 1,000회 · 장소 검색 ${u.search.toLocaleString()} / 100,000회 (이 브라우저 기준)`;
+  const a=$('#usageBox'); if(a) a.textContent=hasKakao()?t:'';
+  const b=$('#usageLine'); if(b) b.textContent=S.proxy?`오늘 길찾기 ${u.route}/1,000회 · 같은 경로는 저장된 결과를 다시 써요`:'';
+}
+function hasKakao(){ return !!(S.proxy||S.key); }
+async function kakao(path, params, isRoute){
+  if(!hasKakao()) throw new Error('설정 탭에서 카카오 중계 서버 주소를 먼저 넣어주세요.');
+  if(isRoute && !S.proxy) throw new Error('카카오 길찾기는 브라우저에서 직접 부를 수 없어요(CORS). 설정 탭에서 중계 서버(Cloudflare Worker) 주소를 넣어주세요.');
+  const qs=new URLSearchParams(params);
+  const base=S.proxy ? S.proxy.replace(/\/+$/,'') : 'https://dapi.kakao.com';
+  const init=S.proxy ? {} : {headers:{Authorization:'KakaoAK '+S.key}};
   let res;
-  try{ res=await fetch(`https://api.odsay.com/v1/api/${api}?${qs.toString()}`); }
-  catch(e){ throw new Error('ODsay 서버에 연결하지 못했어요. 인터넷 연결이나 키에 등록한 URI(도메인)를 확인하세요.'); }
-  const j=await res.json();
-  if(j.error){
-    const e=Array.isArray(j.error)?j.error[0]:j.error;
-    const msg=e.message||e.msg||JSON.stringify(e);
-    if(String(e.code)==='-98') throw new Error('출발지와 도착지가 너무 가까워요(700m 이내). 걸어가는 게 빠릅니다.');
-    throw new Error('ODsay: '+msg+(/ApiKey|auth|인증/i.test(msg)?' — 키 또는 등록한 URI를 확인하세요.':''));
+  try{ res=await fetch(`${base}/${path}?${qs.toString()}`,init); }
+  catch(e){ throw new Error(S.proxy ? '중계 서버에 연결하지 못했어요. Worker 주소가 맞는지, Worker 코드의 ALLOWED_ORIGINS가 이 사이트 주소('+location.origin+')인지 확인하세요.' : '카카오 서버에 연결하지 못했어요. 인터넷 연결을 확인하세요.'); }
+  let j=null; try{ j=await res.json(); }catch(e){}
+  if(res.ok) bumpUsage(isRoute?'route':'search');
+  if(!res.ok){
+    const msg=(j&&(j.message||j.msg))||('HTTP '+res.status);
+    if(res.status===401) throw new Error('카카오 키가 올바르지 않아요. Worker의 KAKAO_REST_KEY에 REST API 키를 넣었는지 확인하세요. ('+msg+')');
+    if(res.status===403) throw new Error(/허용되지 않은 사이트/.test(msg) ? msg : '카카오맵 사용 권한이 없어요. 카카오 앱의 [카카오맵 → 사용 설정]이 ON인지 확인하세요. ('+msg+')');
+    if(res.status===429) throw new Error('오늘 무료 한도를 다 썼어요. 내일 다시 쓰거나 직접 입력 탭을 이용하세요.');
+    throw new Error('카카오 오류: '+msg);
   }
-  return j.result;
+  return j;
+}
+const ROUTE_STATUS_MSG={
+  STARTNODES_NULL:'출발지 근처에 탈 수 있는 정류장·역이 없어요.',
+  ENDNODES_NULL:'도착지 근처에 내릴 수 있는 정류장·역이 없어요.',
+  EQUAL_POINTS:'출발지와 도착지가 같아요.',
+  INVALID_REQUEST:'요청이 올바르지 않아요. 지점을 다시 골라주세요.',
+  NO_RESULTS:'대중교통 경로가 없어요. 너무 가깝거나 먼 거리일 수 있어요.'
+};
+function cacheKey(a,b){ return [a.x,a.y,b.x,b.y].map(v=>(+v).toFixed(4)).join(','); }
+async function kakaoRoute(a,b){
+  const ck=cacheKey(a,b);
+  const cache=store.get('rcache',{});
+  const hit=cache[ck];
+  if(hit && Date.now()-hit.t < 6*3600*1000) return Object.assign({},hit.j,{_cached:true});
+  const j=await kakao('v2/routing/publictraffic',{start_x:a.x,start_y:a.y,end_x:b.x,end_y:b.y,s_name:a.name||'출발',e_name:b.name||'도착'},true);
+  if(j.status && j.status!=='OK') throw new Error(ROUTE_STATUS_MSG[j.status]||('경로를 찾지 못했어요 ('+j.status+')'));
+  // 최근 20개만 저장
+  cache[ck]={t:Date.now(), j};
+  const keys=Object.keys(cache).sort((x,y)=>cache[y].t-cache[x].t);
+  keys.slice(20).forEach(k=>delete cache[k]);
+  store.set('rcache',cache);
+  return j;
 }
 
 /* ---------- 길찾기 상태 ---------- */
@@ -853,7 +925,7 @@ async function doFind(st,i){
   box.style.display='block'; box.innerHTML='<div class="muted small" style="padding:10px"><span class="spin"></span> 찾는 중…</div>';
   const list=await searchPlaces(q);
   if(!list.length){ box.innerHTML='<div class="muted small" style="padding:10px">결과가 없어요. 다른 이름으로 찾거나 📍로 지도에서 골라주세요.</div>'; return; }
-  box.innerHTML=list.slice(0,10).map(it=>`<button data-p='${esc(JSON.stringify(it))}'>${esc(it.name)}<small>${it.k==='odsay'?'🚏 ':'📌 '}${esc(it.sub||'')}</small></button>`).join('');
+  box.innerHTML=list.slice(0,10).map(it=>`<button data-p='${esc(JSON.stringify(it))}'>${esc(it.name)}<small>${it.k==='kakao'?'📍 ':'🗺 '}${esc(it.sub||'')}</small></button>`).join('');
 }
 $('#stops').addEventListener('keydown',e=>{
   if(e.key==='Enter' && e.target.classList.contains('pname')){ const st=e.target.closest('.stop'); doFind(st,+st.dataset.i); }
@@ -868,23 +940,32 @@ $('#swapBtn').onclick=()=>{ P.points.reverse(); P.modes.reverse(); P.waits.rever
 
 /* ---------- 경로 계산 ---------- */
 function hav(a,b){ const R=6371000, t=Math.PI/180; const dLa=(b.y-a.y)*t, dLo=(b.x-a.x)*t; const x=Math.sin(dLa/2)**2+Math.cos(a.y*t)*Math.cos(b.y*t)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+const MODE_TYPE={bus:'BUS', subway:'SUBWAY', mixed:'BUS_AND_SUBWAY'};
 async function fetchLeg(a,b,mode){
   if(mode==='walk'){
     const m=Math.round(hav(a,b)*1.3); const min=Math.max(1,Math.round(m/75));
-    return [{walk:true, info:{totalTime:min, totalWalk:m, busTransitCount:0, subwayTransitCount:0, payment:0}, segs:[{mode:'walk',min,m}]}];
+    return {alts:[{walk:true, info:{totalTime:min, totalWalk:m, transfers:0, payment:0}, segs:[{mode:'walk',min,m}]}], landing:null, cached:false, noMatch:false};
   }
-  const type = mode==='bus'?2 : mode==='subway'?1 : 0;
-  const r=await odsay('searchPubTransPathT',{SX:a.x,SY:a.y,EX:b.x,EY:b.y,OPT:0,SearchPathType:type});
-  let paths=(r&&r.path)||[];
-  if(mode==='mixed'){ const mx=paths.filter(p=>+p.pathType===3); if(mx.length) paths=mx; else paths.forEach(p=>p._noMixed=true); }
-  if(!paths.length) throw new Error('이 구간에서 조건에 맞는 경로를 찾지 못했어요.');
-  return paths.map(p=>({raw:p, info:p.info||{}, pathType:+p.pathType, segs:pathToSegs(p,S.db), noMixed:!!p._noMixed}));
+  const j=await kakaoRoute(a,b);
+  let routes=(j.routes||[]).map(rt=>{
+    const p=rt.properties||{};
+    const segs=kakaoRouteToSegs(rt,S.db);
+    const walk=segs.filter(s=>s.mode==='walk').reduce((x,s)=>x+(+s.m||0),0);
+    return {info:{totalTime:Math.round((+p.totalTime||0)/60), totalWalk:Math.round(walk), transfers:+p.transfers||0, payment:(p.fare&&+p.fare.value)||0, distance:+p.totalDistance||0}, kType:p.type, pathType:KAKAO_TYPE_TO_PATH[p.type]||0, segs};
+  });
+  if(!routes.length) throw new Error('이 구간에서 대중교통 경로를 찾지 못했어요.');
+  let noMatch=false;
+  if(MODE_TYPE[mode]){
+    const f=routes.filter(r=>r.kType===MODE_TYPE[mode]);
+    if(f.length) routes=f; else noMatch=true;
+  }
+  return {alts:routes, landing:(j.properties&&j.properties.landingURL)||null, cached:!!j._cached, noMatch};
 }
 $('#rGo').onclick=async()=>{
   const out=$('#rOut');
   if(P.points.some(p=>p.y==null)){ out.innerHTML='<div class="err">모든 지점을 검색(🔍)하거나 지도(📍)에서 골라 위치를 정해주세요.</div>'; return; }
   const needKey=P.modes.some(m=>m!=='walk');
-  if(needKey && !S.key){ out.innerHTML='<div class="err">자동 길찾기에는 ODsay API 키가 필요해요. 설정 탭에서 넣거나, <b>직접 입력</b> 탭에서 구간을 넣어 요금을 계산하세요.</div>'; return; }
+  if(needKey && !S.proxy){ out.innerHTML='<div class="err">자동 길찾기에는 카카오 중계 서버 설정이 필요해요. 설정 탭에서 넣거나, <b>직접 입력</b> 탭에서 구간을 넣어 요금을 계산하세요.</div>'; return; }
   P.depart=timeToMin($('#rDepart').value)??timeToMin(nowHHMM());
   out.innerHTML='<div class="card muted"><span class="spin"></span> 경로를 찾는 중…</div>';
   $('#rGo').disabled=true;
@@ -898,16 +979,19 @@ $('#rGo').onclick=async()=>{
   }catch(e){ out.innerHTML=`<div class="err">${esc(e.message)}</div>`; }
   finally{ $('#rGo').disabled=false; }
 };
-function transfersOf(o){ const i=o.info||{}; return Math.max(0,(+i.busTransitCount||0)+(+i.subwayTransitCount||0)-1); }
+function transfersOf(o){ const i=o.info||{}; return Math.max(0,+i.transfers||0); }
 function chainHTML(segs){
   const rides=segs.filter(s=>s.mode!=='walk');
   if(!rides.length) return '<span class="badge walk">🚶 도보</span>';
   return rides.map(s=>`<span class="badge ${s.mode==='ext'?'ext':s.mode}">${s.mode==='bus'?'🚌':s.mode==='subway'?'🚇':'🚆'} ${esc(s.line)}</span>`).join('<span class="arr">›</span>');
 }
+const MODE_NAME={bus:'버스만 다니는', subway:'지하철만 타는', mixed:'버스와 지하철을 섞은'};
+function noMatchHint(mode){ return `<div class="hint">카카오가 ${MODE_NAME[mode]||''} 경로를 주지 않아 다른 경로를 보여드려요. 원하는 수단으로 가려면 환승지점을 넣어 구간을 나눠 보세요.</div>`; }
+function kakaoBtn(leg,label){ return leg.landing?`<a class="btn sm" href="${esc(leg.landing)}" target="_blank" rel="noopener">${label||'카카오맵에서 보기 ↗'}</a>`:''; }
 function legSegsWithWaits(){
   const all=[];
-  P.legs.forEach((alts,li)=>{
-    const o=alts[P.sel[li]]||alts[0];
+  P.legs.forEach((leg,li)=>{
+    const o=leg.alts[P.sel[li]]||leg.alts[0];
     let firstRide=true;
     o.segs.forEach(s=>{
       const c=Object.assign({},s);
@@ -921,44 +1005,47 @@ function legSegsWithWaits(){
 function renderRoute(){
   const out=$('#rOut'); if(!P.legs) return;
   const sortKey=$('#rSort').value; const age=userAge();
+  const cachedNote=P.legs.some(l=>l.cached)?'<span class="muted small">· 저장된 결과 사용(호출 안 함)</span>':'';
   if(P.legs.length===1){
-    let alts=P.legs[0].map((o,i)=>Object.assign(o,{_i:i, _fare:computeTrip(o.segs,age,opts(P.depart)).total}));
+    const leg=P.legs[0];
+    const alts=leg.alts.map((o,i)=>Object.assign(o,{_i:i, _fare:computeTrip(o.segs,age,opts(P.depart)).total}));
     const sorted=[...alts];
     if(sortKey==='time') sorted.sort((a,b)=>(+a.info.totalTime||0)-(+b.info.totalTime||0));
     if(sortKey==='transfer') sorted.sort((a,b)=>transfersOf(a)-transfersOf(b) || (+a.info.totalTime||0)-(+b.info.totalTime||0));
     if(sortKey==='fare') sorted.sort((a,b)=>a._fare-b._fare || (+a.info.totalTime||0)-(+b.info.totalTime||0));
-    let h='';
-    if(alts[0].noMixed) h+='<div class="hint" style="margin-bottom:12px">버스와 지하철을 섞은 경로가 없어 다른 경로를 보여드려요.</div>';
-    sorted.slice(0,8).forEach(o=>{
+    let h=`<div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="muted small">경로 ${alts.length}개 ${cachedNote}</span>${kakaoBtn(leg)}</div>`;
+    if(leg.noMatch) h+=noMatchHint(P.modes[0]);
+    sorted.slice(0,10).forEach(o=>{
       const sel=o._i===P.selIdx;
       h+=`<div class="card pcard ${sel?'sel':''}" data-pi="${o._i}">
         <div class="phead">
           <div><div class="ptime">${o.info.totalTime||'?'}분</div><div class="muted small">환승 ${transfersOf(o)}회 · 도보 ${o.info.totalWalk||0}m</div></div>
-          <div class="pfare"><div class="big">${won(o._fare)}</div><div class="muted small">ODsay 성인요금 ${won(+o.info.payment||0)}</div></div>
+          <div class="pfare"><div class="big">${won(o._fare)}</div><div class="muted small">카카오 표기 ${won(+o.info.payment||0)}</div></div>
         </div>
         <div class="chain">${chainHTML(o.segs)}</div>
         ${sel?`<details open><summary>구간·요금 자세히</summary>${segListHTML(o.segs)}${fareSummaryHTML(o.segs,P.depart,'')}<button class="btn sm" data-edit="${o._i}">✎ 이 경로를 직접 입력 탭에서 고치기</button></details>`:''}
       </div>`;
     });
     out.innerHTML=h;
-    drawMap((P.legs[0][P.selIdx]||{}).segs);
+    drawMap((leg.alts[P.selIdx]||{}).segs);
     return;
   }
   // 환승지점이 있는 계획
-  let h='';
-  P.legs.forEach((alts,li)=>{
+  let h=cachedNote?`<div style="margin-bottom:8px">${cachedNote}</div>`:'';
+  P.legs.forEach((leg,li)=>{
     const a=P.points[li], b=P.points[li+1];
+    const alts=leg.alts;
     const o=alts[P.sel[li]]||alts[0];
     const modeTxt=(MODE_OPTS.find(m=>m[0]===P.modes[li])||[])[1];
     h+=`<div class="card"><div class="row" style="justify-content:space-between"><b>${li+1}구간 · ${esc(a.name)} → ${esc(b.name)}</b><span class="muted small">${esc(modeTxt||'')}</span></div>
-      ${o.noMixed?'<div class="hint">이 구간엔 버스+지하철 혼합 경로가 없어 다른 경로를 골랐어요.</div>':''}
-      ${alts.length>1?`<select data-leg="${li}" style="width:100%;margin-top:8px">${alts.slice(0,8).map((x,xi)=>`<option value="${xi}" ${xi===P.sel[li]?'selected':''}>${x.info.totalTime}분 · 환승 ${transfersOf(x)}회 · ${x.segs.filter(s=>s.mode!=='walk').map(s=>s.line).join(' → ')||'도보'}</option>`).join('')}</select>`:''}
+      ${leg.noMatch?noMatchHint(P.modes[li]):''}
+      ${alts.length>1?`<select data-leg="${li}" style="width:100%;margin-top:8px">${alts.slice(0,10).map((x,xi)=>`<option value="${xi}" ${xi===P.sel[li]?'selected':''}>${x.info.totalTime}분 · 환승 ${transfersOf(x)}회 · ${x.segs.filter(s=>s.mode!=='walk').map(s=>s.line).join(' → ')||'도보'}</option>`).join('')}</select>`:''}
       <div class="chain">${chainHTML(o.segs)}</div>
-      <details><summary>구간 자세히</summary>${segListHTML(o.segs)}</details>
+      <div class="row" style="justify-content:space-between"><details style="flex:1"><summary>구간 자세히</summary>${segListHTML(o.segs)}</details>${kakaoBtn(leg,'카카오맵 ↗')}</div>
     </div>`;
   });
   const segs=legSegsWithWaits();
-  const totalMin=P.legs.reduce((s,alts,li)=>s+(+(alts[P.sel[li]]||alts[0]).info.totalTime||0),0)+P.waits.slice(1,-1).reduce((a,b)=>a+(+b||0),0);
+  const totalMin=P.legs.reduce((s,leg,li)=>s+(+(leg.alts[P.sel[li]]||leg.alts[0]).info.totalTime||0),0)+P.waits.slice(1,-1).reduce((a,b)=>a+(+b||0),0);
   h+=`<div class="card"><div class="phead"><div><div class="ptime">총 ${totalMin}분</div><div class="muted small">환승지점 대기 포함</div></div></div></div>`;
   h+=fareSummaryHTML(segs,P.depart,'전체 요금 (환승지점 포함)');
   h+=`<button class="btn" data-editall="1" style="width:100%">✎ 전체 경로를 직접 입력 탭에서 고치기</button>`;
@@ -967,9 +1054,9 @@ function renderRoute(){
 }
 $('#rOut').addEventListener('click',e=>{
   const ed=e.target.closest('[data-edit]');
-  if(ed){ e.stopPropagation(); loadManual(P.legs[0][+ed.dataset.edit].segs); goTab('manual'); return; }
+  if(ed){ e.stopPropagation(); loadManual(P.legs[0].alts[+ed.dataset.edit].segs); goTab('manual'); return; }
   if(e.target.closest('[data-editall]')){ loadManual(legSegsWithWaits()); goTab('manual'); return; }
-  if(e.target.closest('details')||e.target.closest('select')) return;
+  if(e.target.closest('details')||e.target.closest('select')||e.target.closest('a')) return;
   const c=e.target.closest('.pcard'); if(!c) return;
   P.selIdx=+c.dataset.pi; renderRoute();
 });
@@ -1077,13 +1164,31 @@ $('#tReset').onclick=()=>{ if(!confirm('모든 지역의 요금을 기본값으�
 
 /* ---------- 설정 ---------- */
 $('#apiKey').value=S.key;
-$('#apiKey').addEventListener('change',e=>{ S.key=e.target.value.trim(); store.set('key',S.key); renderKeyWarn(); });
-$('#keyShow').onclick=()=>{ const i=$('#apiKey'); i.type=i.type==='password'?'text':'password'; };
+$('#apiKey').addEventListener('change',e=>{ S.key=e.target.value.trim(); store.set('kkey',S.key); renderKeyWarn(); renderUsage(); });
+const WORKER_TEMPLATE="// 카카오 API 중계 서버 (Cloudflare Worker)\n// - 카카오 대중교통 길찾기는 브라우저에서 직접 부를 수 없어서(CORS) 이 Worker가 대신 호출합니다.\n// - REST API 키는 Worker의 비밀 변수(KAKAO_REST_KEY)에만 저장되고, 사이트에는 노출되지 않습니다.\n\n// ▼ 내 사이트 주소로 바꾸세요 (https://아이디.github.io 처럼, 끝에 / 없이)\nconst ALLOWED_ORIGINS = ['https://YOUR_ID.github.io'];\n\n// 중계를 허용할 카카오 API 경로\nconst ALLOWED_PATHS = ['/v2/routing/publictraffic', '/v2/local/search/keyword.json'];\n\nexport default {\n  async fetch(request, env) {\n    const origin = request.headers.get('Origin') || '';\n    const allowed = ALLOWED_ORIGINS.includes(origin);\n    const cors = {\n      'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_ORIGINS[0],\n      'Access-Control-Allow-Methods': 'GET, OPTIONS',\n      'Access-Control-Allow-Headers': 'Content-Type',\n      'Vary': 'Origin'\n    };\n    const json = (obj, status) => new Response(JSON.stringify(obj), {\n      status, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' }\n    });\n\n    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });\n    if (request.method !== 'GET') return json({ message: 'GET만 허용됩니다.' }, 405);\n    if (!allowed) return json({ message: '허용되지 않은 사이트에서 온 요청이에요. Worker 코드의 ALLOWED_ORIGINS를 확인하세요.' }, 403);\n    if (!env.KAKAO_REST_KEY) return json({ message: 'Worker에 KAKAO_REST_KEY 비밀 변수가 없어요.' }, 500);\n\n    const url = new URL(request.url);\n    if (!ALLOWED_PATHS.includes(url.pathname)) return json({ message: '허용되지 않은 경로예요.' }, 404);\n\n    const res = await fetch('https://dapi.kakao.com' + url.pathname + url.search, {\n      headers: { Authorization: 'KakaoAK ' + env.KAKAO_REST_KEY }\n    });\n    return new Response(await res.text(), {\n      status: res.status,\n      headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' }\n    });\n  }\n};\n";
+function workerCode(){
+  const o=/^https?:/.test(location.origin)?location.origin:'https://YOUR_ID.github.io';
+  return WORKER_TEMPLATE.replace("['https://YOUR_ID.github.io']", JSON.stringify([o]).replace(/"/g,"'"));
+}
+$('#workerCode').value=workerCode();
+$('#copyWorker').onclick=async()=>{
+  const t=$('#workerCode');
+  try{ await navigator.clipboard.writeText(t.value); $('#copyMsg').textContent='복사했어요'; }
+  catch(e){ t.select(); document.execCommand&&document.execCommand('copy'); $('#copyMsg').textContent='선택했어요. 복사해서 붙여넣으세요'; }
+};
+$('#proxyUrl').value=S.proxy;
+$('#proxyUrl').addEventListener('change',e=>{ S.proxy=e.target.value.trim(); store.set('proxy',S.proxy); renderKeyWarn(); renderUsage(); });
 $('#keyTest').onclick=async()=>{
-  S.key=$('#apiKey').value.trim(); store.set('key',S.key); renderKeyWarn();
-  const m=$('#keyMsg'); m.innerHTML='<span class="spin"></span> 확인 중…';
-  try{ const r=await odsay('searchStation',{stationName:'서울역'}); m.innerHTML=`<span style="color:var(--bus)">✓ 연결됐어요 (정류장 ${((r&&r.station)||[]).length}건 확인)</span>`; }
-  catch(e){ m.innerHTML=`<span style="color:#c53030">✕ ${esc(e.message)}</span>`; }
+  S.proxy=$('#proxyUrl').value.trim(); store.set('proxy',S.proxy); renderKeyWarn(); renderUsage();
+  const m=$('#keyMsg');
+  if(!S.proxy){ m.innerHTML='<span style="color:#c53030">✕ 중계 서버 주소를 먼저 넣어주세요.</span>'; return; }
+  m.innerHTML='<span class="spin"></span> 장소 검색 확인 중…';
+  try{
+    const r=await kakao('v2/local/search/keyword.json',{query:'서울역',size:1},false);
+    m.innerHTML='<span class="spin"></span> 장소 검색 ✓ · 길찾기 확인 중…';
+    const j=await kakaoRoute({x:126.9707,y:37.5547,name:'서울역'},{x:126.9779,y:37.5663,name:'서울시청'});
+    m.innerHTML=`<span style="color:var(--bus)">✓ 연결됐어요 — 장소 검색과 대중교통 길찾기 모두 사용할 수 있어요 (테스트 경로 ${((j&&j.routes)||[]).length}개)</span>`;
+  }catch(e){ m.innerHTML=`<span style="color:#c53030">✕ ${esc(e.message)}</span>`; }
 };
 $('#birth').value=S.birth;
 $('#birth').addEventListener('change',e=>{ S.birth=e.target.value; store.set('birth',S.birth); refreshAge(); rerenderAll(); });
@@ -1096,7 +1201,7 @@ $('#dbApply').onclick=()=>{
 };
 $('#dbReset').onclick=()=>{ S.db=clone(FARE_DB_DEFAULT); store.del('db'); $('#dbJson').value=JSON.stringify(S.db,null,1); $('#dbMsg').textContent='✓ 기본값 복원'; rerenderAll(); };
 function renderKeyWarn(){
-  $('#keyWarn').innerHTML = S.key ? '' : `<div class="card" style="background:var(--warn-bg);border-color:transparent"><b style="color:var(--warn)">자동 길찾기를 쓰려면 ODsay 키가 필요해요</b><div class="muted small" style="margin-top:4px">무료 키를 받아 <a href="#" id="toSet">설정</a>에 넣어주세요. 키 없이도 <a href="#" id="toMan">직접 입력</a> 탭에서 구간별 요금은 계산할 수 있어요.</div></div>`;
+  $('#keyWarn').innerHTML = S.proxy ? '' : `<div class="card" style="background:var(--warn-bg);border-color:transparent"><b style="color:var(--warn)">자동 길찾기를 쓰려면 한 번만 설정이 필요해요</b><div class="muted small" style="margin-top:4px">카카오 키를 넣은 무료 중계 서버를 만들어 <a href="#" id="toSet">설정</a>에 주소를 넣어주세요(5분). 키 없이도 <a href="#" id="toMan">직접 입력</a> 탭에서 구간별 요금은 계산할 수 있어요.</div></div>`;
   const a=$('#toSet'), b=$('#toMan');
   if(a) a.onclick=e=>{e.preventDefault();goTab('settings');};
   if(b) b.onclick=e=>{e.preventDefault();goTab('manual');};
@@ -1107,7 +1212,7 @@ function rerenderAll(){ if(P.legs) renderRoute(); computeManual(); }
 /* ---------- 시작 ---------- */
 $('#rDepart').value=nowHHMM();
 $('#mDepart').value=nowHHMM();
-refreshAge(); renderKeyWarn(); renderStops(); renderManual(); drawMap();
+refreshAge(); renderKeyWarn(); renderUsage(); renderStops(); renderManual(); drawMap();
 </script>
 </body>
 </html>
