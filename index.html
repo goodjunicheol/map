@@ -196,6 +196,7 @@ a{color:var(--pri)}
     <div class="row" style="margin-top:10px">
       <button class="btn sm" id="mAddBus">＋ 🚌 버스 구간</button>
       <button class="btn sm" id="mAddSub">＋ 🚇 지하철 구간</button>
+      <button class="btn sm" id="mAddExt">＋ 🚍 시외·고속</button>
       <button class="btn sm ghost" id="mClear">모두 지우기</button>
     </div>
   </div>
@@ -496,7 +497,11 @@ function computeTrip(segs, age, opts){
   for(const s of segs){
     if(s.mode==='walk'){ const m=+s.min||0; pendingGap+=m; clock+=m; continue; }
     if(s.mode!=='bus' && s.mode!=='subway'){
-      chains.push({external:true, seg:s, total:0}); cur=null; clock+=+s.min||0; pendingGap=0; first=false; continue;
+      // 시외·고속버스, 기차 등: 통합환승 대상이 아니므로 별도 결제로 끊고, 앞뒤 환승도 끊는다
+      const known = s.fare!=null && s.fare!=='';
+      const amt = !known ? 0 : (cat==='infant' ? 0 : Math.max(0,+s.fare||0));
+      chains.push({external:true, seg:s, total:amt, known, breakReason: cur ? '시외·고속버스 등은 통합환승이 안 돼요' : null});
+      cur=null; clock+=(s.wait!=null&&s.wait!==''?+s.wait:0)+(+s.min||0); pendingGap=0; first=false; continue;
     }
     const wait = (s.wait!=null && s.wait!=='') ? +s.wait : (first?0:defWait);
     const gap = pendingGap + wait;
@@ -516,13 +521,13 @@ function computeTrip(segs, age, opts){
   }
   let total=0, n=0, est=false;
   for(const c of chains){
-    if(c.external) continue;
+    if(c.external){ total+=c.total; if(c.known && c.seg.fareEst) est=true; continue; }
     evalChain(c, idx, n===0);
     total+=c.total; n++;
     if(c.rides.some(r=>r.f.est)) est=true;
     const rr=db.regions[c.region]; if(rr && (rr.transferEst||rr.seniorEst)) est=true;
   }
-  return {age:+age, cat, chains, total, est, hasExternal:chains.some(c=>c.external)};
+  return {age:+age, cat, chains, total, est, hasExternal:chains.some(c=>c.external && !c.known), hasIntercity:chains.some(c=>c.external && c.known)};
 }
 function evalChain(c, idx, isFirst){
   const lines=[]; let running=0;
@@ -591,6 +596,10 @@ function mapKakaoBusType(region, label, name, db){
   if(has('general')) return 'general';
   return first;
 }
+function isIntercityBus(label, name){
+  const L=String(label||'');
+  return /시외|고속|리무진|공항/.test(L);
+}
 function kakaoRouteToSegs(route, db){
   const segs=[];
   for(const st of (route.steps||[])){
@@ -613,12 +622,17 @@ function kakaoRouteToSegs(route, db){
       const region=y0!=null?detectRegion(y0,x0):'other';
       const v=veh[0]||{};
       const names=veh.map(x=>x.name).filter(Boolean);
+      if(isIntercityBus(v.type, v.name)){
+        segs.push({mode:'ext', kind:'intercity', busLabel:v.type||'', line:names.slice(0,3).join(', ')||'시외버스', km:dist/1000, min, from, to,
+          stops:Math.max(0,stops.length-1), coords:pts, fare:null});
+        continue;
+      }
       segs.push({mode:'bus', region, type:mapKakaoBusType(region, v.type, v.name, db), busLabel:v.type||'',
         line:names.slice(0,3).join(', ')+(names.length>3?' 외':'') || '버스', km:dist/1000, min, from, to,
         stops:Math.max(0,stops.length-1), coords:pts});
       continue;
     }
-    segs.push({mode:'ext', line:(veh[0]&&veh[0].name)||p.guidance||'기타 구간', from, to, min, coords:pts});
+    segs.push({mode:'ext', kind:'other', line:(veh[0]&&veh[0].name)||p.guidance||'기타 구간', from, to, min, coords:pts, fare:null});
   }
   return segs;
 }
@@ -688,7 +702,15 @@ function renderBreakdown(trip){
   let h='';
   trip.chains.forEach((c,i)=>{
     if(c.external){
-      h+=`<div class="grp"><h4><span><span class="badge ext">별도</span> ${esc(c.seg.line)}</span><span>요금 별도</span></h4><div class="muted small">${esc(c.seg.from||'')} → ${esc(c.seg.to||'')} · 시외버스·기차 등은 이 계산에 포함되지 않아요.</div></div>`;
+      const sg=c.seg, isBus=sg.kind==='intercity';
+      const nm=(isBus?'🚍 ':'🚆 ')+sg.line+(sg.busLabel?` (${sg.busLabel})`:'');
+      h+=`<div class="grp"><h4><span>${i+1}번째 결제 · <span class="badge ext">환승 없음</span></span><span>${c.known?won(c.total):'요금 별도'}</span></h4>`;
+      if(c.breakReason) h+=`<div class="brk">↳ ${esc(c.breakReason)}</div>`;
+      h+=`<div class="ln"><span>${esc(nm)}</span><span>${c.known?won(c.total):'-'}</span></div>`;
+      h+=`<div class="muted small">${esc(sg.from||'')}${sg.to?' → '+esc(sg.to):''} · ${
+        !c.known ? '이 구간 요금은 알 수 없어 합계에서 빠졌어요. 직접 입력 탭에서 요금을 넣을 수 있어요.'
+        : sg.fareEst ? '카카오 총요금에서 시내 구간을 뺀 추정치예요. 성인 기준이라 어린이·청소년 할인은 노선마다 달라요.'
+        : '직접 입력한 요금이에요.'}</div></div>`;
       return;
     }
     h+=`<div class="grp"><h4><span>${i+1}번째 결제 · ${esc(regionName(c.region))}</span><span>${won(c.total)}</span></h4>`;
@@ -715,10 +737,10 @@ function renderAgeTable(segs, depart){
 function segListHTML(segs){
   return segs.map(s=>{
     if(s.mode==='walk') return `<div class="seg"><div class="ic">🚶</div><div class="tx">도보 ${s.m?Math.round(s.m)+'m · ':''}${s.min}분</div></div>`;
-    if(s.mode==='ext') return `<div class="seg"><div class="ic">🚆</div><div class="tx">${esc(s.line)}<small>${esc(s.from||'')} → ${esc(s.to||'')} · ${s.min}분</small></div></div>`;
+    if(s.mode==='ext') return `<div class="seg"><div class="ic">${s.kind==='intercity'?'🚍':'🚆'}</div><div class="tx"><b>${esc(s.line)}</b> <span class="badge ext">${s.kind==='intercity'?'시외·고속 · 환승 안 됨':'별도 요금'}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''}${s.km?' · '+(+s.km).toFixed(1)+'km':''} · ${s.min}분${s.busLabel?' · 카카오 분류: '+esc(s.busLabel):''}</small></div></div>`;
     const r=S.db.regions[s.region]||S.db.regions.other;
     const tl = s.mode==='bus' ? (r.bus[busTypeOf(s.region,s.type,S.db)]||{}).label : (S.db.regions[subwayRegion(s.region,S.db)].subway||{}).label;
-    return `<div class="seg"><div class="ic">${s.mode==='bus'?'🚌':'🚇'}</div><div class="tx"><b>${esc(s.line||'')}</b> <span class="badge ${s.mode}">${esc(r.name)} · ${esc(tl||'')}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''} · ${(+s.km||0).toFixed(1)}km${s.stops?' · '+s.stops+'개 정류장':''}${s.min?' · '+s.min+'분':''}</small></div></div>`;
+    return `<div class="seg"><div class="ic">${s.mode==='bus'?'🚌':'🚇'}</div><div class="tx"><b>${esc(s.line||'')}</b> <span class="badge ${s.mode}">${esc(r.name)} · ${esc(tl||'')}</span><small>${esc(s.from||'')}${s.to?' → '+esc(s.to):''} · ${(+s.km||0).toFixed(1)}km${s.stops?' · '+s.stops+'개 정류장':''}${s.min?' · '+s.min+'분':''}${s.busLabel?' · 카카오 분류: '+esc(s.busLabel):''}</small></div></div>`;
   }).join('');
 }
 function fareSummaryHTML(segs, depart, title){
@@ -726,6 +748,7 @@ function fareSummaryHTML(segs, depart, title){
   return `<div class="card">
     ${title?`<b>${esc(title)}</b>`:''}
     <div class="total"><span>내 요금 (만 ${trip.age}세 · ${CAT_LABEL[trip.cat]})</span><span class="v">${won(trip.total)}${trip.hasExternal?' +α':''}</span></div>
+    ${trip.hasIntercity?'<div class="hint">시외·고속버스 구간은 통합환승이 안 돼서 따로 결제하는 것으로 계산했어요.</div>':''}
     ${trip.est?'<div class="hint">일부 요금·환승 규칙에 추정값이 들어 있어요. 요금표 탭에서 확인하고 고칠 수 있습니다.</div>':''}
     ${renderBreakdown(trip)}
     <details open><summary>연령별 요금 전체 보기</summary>${renderAgeTable(segs,depart)}</details>
@@ -830,7 +853,7 @@ const ROUTE_STATUS_MSG={
   ENDNODES_NULL:'도착지 근처에 내릴 수 있는 정류장·역이 없어요.',
   EQUAL_POINTS:'출발지와 도착지가 같아요.',
   INVALID_REQUEST:'요청이 올바르지 않아요. 지점을 다시 골라주세요.',
-  NO_RESULTS:'대중교통 경로가 없어요. 너무 가깝거나 먼 거리일 수 있어요.'
+  NO_RESULTS:'카카오가 이 구간의 대중교통 경로를 주지 않았어요. 중간에 환승지점(역·터미널)을 넣어 구간을 나눠 보세요.'
 };
 function cacheKey(a,b){ return [a.x,a.y,b.x,b.y].map(v=>(+v).toFixed(4)).join(','); }
 async function kakaoRoute(a,b){
@@ -839,7 +862,7 @@ async function kakaoRoute(a,b){
   const hit=cache[ck];
   if(hit && Date.now()-hit.t < 6*3600*1000) return Object.assign({},hit.j,{_cached:true});
   const j=await kakao('v2/routing/publictraffic',{start_x:a.x,start_y:a.y,end_x:b.x,end_y:b.y,s_name:a.name||'출발',e_name:b.name||'도착'},true);
-  if(j.status && j.status!=='OK') throw new Error(ROUTE_STATUS_MSG[j.status]||('경로를 찾지 못했어요 ('+j.status+')'));
+  if(j.status && j.status!=='OK'){ const er=new Error(ROUTE_STATUS_MSG[j.status]||('경로를 찾지 못했어요 ('+j.status+')')); er.code=j.status; throw er; }
   // 최근 20개만 저장
   cache[ck]={t:Date.now(), j};
   const keys=Object.keys(cache).sort((x,y)=>cache[y].t-cache[x].t);
@@ -854,6 +877,7 @@ const MODE_OPTS=[
   ['bus','🚌 버스만'],
   ['mixed','🚌+🚇 버스+지하철 (섞어서)'],
   ['subway','🚇 지하철만'],
+  ['intercity','🚍 시외·고속버스 (터미널 ↔ 터미널)'],
   ['walk','🚶 걸어서']
 ];
 const P={
@@ -946,10 +970,28 @@ async function fetchLeg(a,b,mode){
     const m=Math.round(hav(a,b)*1.3); const min=Math.max(1,Math.round(m/75));
     return {alts:[{walk:true, info:{totalTime:min, totalWalk:m, transfers:0, payment:0}, segs:[{mode:'walk',min,m}]}], landing:null, cached:false, noMatch:false};
   }
-  const j=await kakaoRoute(a,b);
+  if(mode==='intercity') return intercityLeg(a,b);
+  let j;
+  try{ j=await kakaoRoute(a,b); }
+  catch(e){
+    const d=hav(a,b);
+    if(e.code==='NO_RESULTS'||e.code==='EQUAL_POINTS'||e.code==='STARTNODES_NULL'||e.code==='ENDNODES_NULL'){
+      if(d<1500){ const w=await fetchLeg(a,b,'walk'); w.note='가까운 거리라 대중교통 대신 걷는 경로로 계산했어요.'; return w; }
+      if(d>=15000 && e.code==='NO_RESULTS') e.longTrip=true;
+    }
+    throw e;
+  }
   let routes=(j.routes||[]).map(rt=>{
     const p=rt.properties||{};
     const segs=kakaoRouteToSegs(rt,S.db);
+    const kFare=(p.fare&&+p.fare.value)||0;
+    const exts=segs.filter(x=>x.mode==='ext');
+    if(exts.length && kFare>0){
+      // 카카오 총요금에서 시내 구간(성인) 요금을 빼서 시외 구간 요금을 추정
+      const cityAdult=computeTrip(segs,30,opts(8*60)).total;
+      const rest=kFare-cityAdult;
+      if(rest>0){ const each=Math.round(rest/exts.length/10)*10; exts.forEach(x=>{ x.fare=each; x.fareEst=true; }); }
+    }
     const walk=segs.filter(s=>s.mode==='walk').reduce((x,s)=>x+(+s.m||0),0);
     return {info:{totalTime:Math.round((+p.totalTime||0)/60), totalWalk:Math.round(walk), transfers:+p.transfers||0, payment:(p.fare&&+p.fare.value)||0, distance:+p.totalDistance||0}, kType:p.type, pathType:KAKAO_TYPE_TO_PATH[p.type]||0, segs};
   });
@@ -961,6 +1003,19 @@ async function fetchLeg(a,b,mode){
   }
   return {alts:routes, landing:(j.properties&&j.properties.landingURL)||null, cached:!!j._cached, noMatch};
 }
+function icKey(a,b){ return (a.name||'')+' → '+(b.name||''); }
+function intercityLeg(a,b){
+  const km=hav(a,b)*1.2/1000;          // 도로 거리 어림
+  const min=Math.round(km/80*60)+10;   // 고속도로 평균 80km/h + 진출입
+  const f=store.get('icfare',{})[icKey(a,b)];
+  const fare=(f!=null&&f!=='')?+f:null;
+  const seg={mode:'ext', kind:'intercity', line:'시외·고속버스', km, min, from:a.name, to:b.name, fare, coords:[[a.y,a.x],[b.y,b.x]]};
+  return {alts:[{info:{totalTime:min,totalWalk:0,transfers:0,payment:fare||0}, segs:[seg]}], landing:null, cached:false, noMatch:false, intercity:true};
+}
+async function nearTerminals(p){
+  const j=await kakao('v2/local/search/keyword.json',{query:'버스터미널',x:p.x,y:p.y,radius:20000,sort:'distance',size:5},false);
+  return ((j&&j.documents)||[]).filter(d=>/터미널/.test(d.place_name)).map(d=>({name:d.place_name,x:+d.x,y:+d.y,auto:true}));
+}
 $('#rGo').onclick=async()=>{
   const out=$('#rOut');
   if(P.points.some(p=>p.y==null)){ out.innerHTML='<div class="err">모든 지점을 검색(🔍)하거나 지도(📍)에서 골라 위치를 정해주세요.</div>'; return; }
@@ -970,9 +1025,32 @@ $('#rGo').onclick=async()=>{
   out.innerHTML='<div class="card muted"><span class="spin"></span> 경로를 찾는 중…</div>';
   $('#rGo').disabled=true;
   try{
-    const legs=[];
+    const legs=[]; let split=false; P.autoNote=null;
     for(let i=0;i<P.points.length-1;i++){
-      legs.push(await fetchLeg(P.points[i],P.points[i+1],P.modes[i]));
+      try{ legs.push(await fetchLeg(P.points[i],P.points[i+1],P.modes[i])); }
+      catch(e){
+        if(!e.longTrip || split) throw e;
+        // 먼 거리: 카카오는 도시 간 이동 경로를 주지 않으므로 가까운 버스터미널을 찾아 시외·고속 구간으로 잇는다
+        split=true;
+        out.innerHTML='<div class="card muted"><span class="spin"></span> 거리가 멀어 근처 버스터미널을 찾는 중…</div>';
+        const a=P.points[i], b=P.points[i+1], m=P.modes[i];
+        const [ta,tb]=await Promise.all([nearTerminals(a),nearTerminals(b)]);
+        if(!ta.length||!tb.length) throw new Error('거리가 멀어 카카오가 경로를 주지 않았고, '+(!ta.length?'출발지':'도착지')+' 근처 20km 안에서 버스터미널도 찾지 못했어요. 환승지점에 터미널이나 기차역을 직접 넣고, 그 사이 구간 수단을 "시외·고속버스"로 바꿔주세요.');
+        const T1=ta[0], T2=tb[0];
+        if(T1.name===T2.name) throw new Error('두 곳이 같은 터미널 권역이라 시외 구간으로 나눌 수 없어요. 환승지점을 직접 넣어 구간을 나눠 보세요.');
+        const startNear=hav(a,T1)<800, endNear=hav(T2,b)<800;
+        const insPts=[], insModes=[];
+        if(!startNear){ insPts.push(T1); insModes.push(m); }
+        insModes.push('intercity');
+        if(!endNear){ insPts.push(T2); insModes.push(m); }
+        P.points.splice(i+1,0,...insPts);
+        P.modes.splice(i,1,...insModes);
+        P.waits.splice(i+1,0,...insPts.map(()=>+S.wait||5));
+        renderStops(); drawMap();
+        P.autoNote=`거리가 멀어 <b>${esc(T1.name)} → ${esc(T2.name)}</b> 시외·고속버스 구간을 자동으로 넣었어요. 터미널이 맞지 않으면 위에서 환승지점을 바꾸고 다시 찾아주세요.`;
+        out.innerHTML='<div class="card muted"><span class="spin"></span> 터미널을 거치는 경로를 찾는 중…</div>';
+        i--; continue;
+      }
     }
     P.legs=legs; P.sel=legs.map(()=>0); P.selIdx=0;
     renderRoute();
@@ -983,7 +1061,7 @@ function transfersOf(o){ const i=o.info||{}; return Math.max(0,+i.transfers||0);
 function chainHTML(segs){
   const rides=segs.filter(s=>s.mode!=='walk');
   if(!rides.length) return '<span class="badge walk">🚶 도보</span>';
-  return rides.map(s=>`<span class="badge ${s.mode==='ext'?'ext':s.mode}">${s.mode==='bus'?'🚌':s.mode==='subway'?'🚇':'🚆'} ${esc(s.line)}</span>`).join('<span class="arr">›</span>');
+  return rides.map(s=>`<span class="badge ${s.mode==='ext'?'ext':s.mode}">${s.mode==='bus'?'🚌':s.mode==='subway'?'🚇':s.kind==='intercity'?'🚍':'🚆'} ${esc(s.line)}</span>`).join('<span class="arr">›</span>');
 }
 const MODE_NAME={bus:'버스만 다니는', subway:'지하철만 타는', mixed:'버스와 지하철을 섞은'};
 function noMatchHint(mode){ return `<div class="hint">카카오가 ${MODE_NAME[mode]||''} 경로를 주지 않아 다른 경로를 보여드려요. 원하는 수단으로 가려면 환승지점을 넣어 구간을 나눠 보세요.</div>`; }
@@ -1032,6 +1110,7 @@ function renderRoute(){
   }
   // 환승지점이 있는 계획
   let h=cachedNote?`<div style="margin-bottom:8px">${cachedNote}</div>`:'';
+  if(P.autoNote) h+=`<div class="hint" style="margin:0 0 12px">${P.autoNote}</div>`;
   P.legs.forEach((leg,li)=>{
     const a=P.points[li], b=P.points[li+1];
     const alts=leg.alts;
@@ -1039,6 +1118,13 @@ function renderRoute(){
     const modeTxt=(MODE_OPTS.find(m=>m[0]===P.modes[li])||[])[1];
     h+=`<div class="card"><div class="row" style="justify-content:space-between"><b>${li+1}구간 · ${esc(a.name)} → ${esc(b.name)}</b><span class="muted small">${esc(modeTxt||'')}</span></div>
       ${leg.noMatch?noMatchHint(P.modes[li]):''}
+      ${leg.note?`<div class="hint">${esc(leg.note)}</div>`:''}
+      ${leg.intercity?`<div class="row" style="margin-top:8px;align-items:flex-end">
+          <label class="f">승차권 요금 (원, 성인)<input type="number" step="100" min="0" inputmode="numeric" data-icfare="${li}" value="${o.segs[0].fare!=null?o.segs[0].fare:''}" placeholder="예: 12000" style="width:150px"></label>
+          <a class="btn sm" href="https://www.kobus.co.kr" target="_blank" rel="noopener">고속버스 시간·요금 ↗</a>
+          <a class="btn sm" href="https://www.bustago.or.kr" target="_blank" rel="noopener">시외버스 시간·요금 ↗</a>
+        </div>
+        <div class="muted small" style="margin-top:4px">카카오 길찾기는 도시 간 버스를 알려주지 않아서, 시간(약 ${o.info.totalTime}분)은 거리로 어림한 값이에요. 요금을 넣으면 합계에 더해지고 다음에도 기억해요.</div>`:''}
       ${alts.length>1?`<select data-leg="${li}" style="width:100%;margin-top:8px">${alts.slice(0,10).map((x,xi)=>`<option value="${xi}" ${xi===P.sel[li]?'selected':''}>${x.info.totalTime}분 · 환승 ${transfersOf(x)}회 · ${x.segs.filter(s=>s.mode!=='walk').map(s=>s.line).join(' → ')||'도보'}</option>`).join('')}</select>`:''}
       <div class="chain">${chainHTML(o.segs)}</div>
       <div class="row" style="justify-content:space-between"><details style="flex:1"><summary>구간 자세히</summary>${segListHTML(o.segs)}</details>${kakaoBtn(leg,'카카오맵 ↗')}</div>
@@ -1060,7 +1146,17 @@ $('#rOut').addEventListener('click',e=>{
   const c=e.target.closest('.pcard'); if(!c) return;
   P.selIdx=+c.dataset.pi; renderRoute();
 });
-$('#rOut').addEventListener('change',e=>{ if(e.target.matches('select[data-leg]')){ P.sel[+e.target.dataset.leg]=+e.target.value; renderRoute(); } });
+$('#rOut').addEventListener('change',e=>{
+  if(e.target.matches('select[data-leg]')){ P.sel[+e.target.dataset.leg]=+e.target.value; renderRoute(); }
+  if(e.target.matches('input[data-icfare]')){
+    const li=+e.target.dataset.icfare, v=e.target.value;
+    const fare=v===''?null:Math.max(0,+v||0);
+    const a=P.points[li], b=P.points[li+1];
+    const all=store.get('icfare',{}); if(fare==null) delete all[icKey(a,b)]; else all[icKey(a,b)]=fare; store.set('icfare',all);
+    const alt=P.legs[li].alts[0]; alt.segs[0].fare=fare; alt.info.payment=fare||0;
+    renderRoute();
+  }
+});
 $('#rSort').onchange=()=>renderRoute();
 
 /* ---------- 직접 입력 ---------- */
@@ -1071,8 +1167,11 @@ function loadManual(segs){
   M=[]; let pend=0;
   segs.forEach(s=>{
     if(s.mode==='walk'){ pend+=+s.min||0; return; }
-    if(s.mode!=='bus'&&s.mode!=='subway') return;
     const w=(s.wait!=null?+s.wait:(M.length?+S.wait||0:0))+(M.length?pend:0);
+    if(s.mode!=='bus'&&s.mode!=='subway'){
+      M.push({mode:'ext', kind:s.kind||'other', line:s.line||'', fare:s.fare!=null?s.fare:'', km:+(+s.km||0).toFixed(1), min:+s.min||0, wait:M.length?w:0, from:s.from||'', to:s.to||''});
+      pend=0; return;
+    }
     M.push({mode:s.mode, region:s.region, type:s.type||'', km:+(+s.km||0).toFixed(1), min:+s.min||0, wait:M.length?w:0, line:s.line||'', from:s.from||'', to:s.to||''});
     pend=0;
   });
@@ -1082,7 +1181,13 @@ function loadManual(segs){
 function renderManual(){
   store.set('manual',M);
   if(!M.length){ $('#mRows').innerHTML='<p class="muted" style="text-align:center;padding:16px 0 4px">아래 버튼으로 탄 순서대로 구간을 추가하세요.</p>'; $('#mOut').innerHTML=''; return; }
-  $('#mRows').innerHTML=M.map((r,i)=>`<div class="mrow" data-i="${i}">
+  $('#mRows').innerHTML=M.map((r,i)=> r.mode==='ext' ? `<div class="mrow" data-i="${i}">
+    <div class="num"><span>${i+1}. 🚍 시외·고속 등 (환승 안 됨)</span><span><button class="btn sm ghost" data-a="up" ${i===0?'disabled':''}>▲</button><button class="btn sm ghost" data-a="del">삭제</button></span></div>
+    <label class="f c3">노선·이름<input data-k="line" value="${esc(r.line)}" placeholder="예: 8366, 고속버스"></label>
+    <label class="f c3">요금(원, 성인)<input type="number" step="100" min="0" data-k="fare" value="${r.fare}" placeholder="승차권 요금"></label>
+    <label class="f c2">탑승(분)<input type="number" min="0" data-k="min" value="${r.min}"></label>
+    ${i>0?`<label class="f c2">타기 전 도보+대기(분)<input type="number" min="0" data-k="wait" value="${r.wait}"></label>`:'<div class="c2"></div>'}
+  </div>` : `<div class="mrow" data-i="${i}">
     <div class="num"><span>${i+1}. ${r.mode==='bus'?'🚌 버스':'🚇 지하철'}</span><span><button class="btn sm ghost" data-a="up" ${i===0?'disabled':''}>▲</button><button class="btn sm ghost" data-a="del">삭제</button></span></div>
     <label class="f c2">지역<select data-k="region">${regionOptions(r.region)}</select></label>
     ${r.mode==='bus'?`<label class="f c2">버스 종류<select data-k="type">${typeOptions(r.region,r.type)}</select></label>`:`<label class="f c2">노선<input data-k="line" value="${esc(r.line)}" placeholder="예: 2호선"></label>`}
@@ -1096,17 +1201,19 @@ function renderManual(){
 function computeManual(){
   if(!M.length){ $('#mOut').innerHTML=''; return; }
   const depart=timeToMin($('#mDepart').value)??timeToMin(nowHHMM());
-  const segs=M.map((r,i)=>({mode:r.mode, region:r.region, type:r.type, km:+r.km||0, min:+r.min||0, wait:i?(+r.wait||0):0, line:r.line, from:r.from}));
+  const segs=M.map((r,i)=> r.mode==='ext' ? ({mode:'ext', kind:r.kind||'intercity', line:r.line||'시외·고속', fare:(r.fare===''||r.fare==null)?null:+r.fare, min:+r.min||0, wait:i?(+r.wait||0):0}) : ({mode:r.mode, region:r.region, type:r.type, km:+r.km||0, min:+r.min||0, wait:i?(+r.wait||0):0, line:r.line, from:r.from}));
   $('#mOut').innerHTML=fareSummaryHTML(segs,depart,'계산 결과');
 }
 function addManual(mode){
+  if(mode==='ext'){ M.push({mode:'ext', kind:'intercity', line:'', fare:'', km:0, min:30, wait:M.length?(+S.wait||5):0}); renderManual(); return; }
   const prev=M[M.length-1];
-  const region=prev?prev.region:'seoul';
+  const region=(prev&&prev.region)||'seoul';
   M.push({mode, region, type: mode==='bus'?busTypeOf(region,'',S.db):'', km:mode==='bus'?5:8, min:mode==='bus'?15:15, wait:M.length?(+S.wait||5):0, line:'', from:''});
   renderManual();
 }
 $('#mAddBus').onclick=()=>addManual('bus');
 $('#mAddSub').onclick=()=>addManual('subway');
+$('#mAddExt').onclick=()=>addManual('ext');
 $('#mClear').onclick=()=>{ if(confirm('입력한 구간을 모두 지울까요?')){ M=[]; renderManual(); } };
 $('#mDepart').onchange=computeManual;
 $('#mRows').addEventListener('click',e=>{
@@ -1119,7 +1226,7 @@ $('#mRows').addEventListener('click',e=>{
 $('#mRows').addEventListener('change',e=>{
   const el=e.target; const k=el.dataset.k; if(!k) return;
   const i=+el.closest('.mrow').dataset.i;
-  M[i][k]= ['km','min','wait'].includes(k) ? Math.max(0,+el.value||0) : el.value;
+  M[i][k]= ['km','min','wait'].includes(k) ? Math.max(0,+el.value||0) : k==='fare' ? (el.value===''?'':Math.max(0,+el.value||0)) : el.value;
   if(k==='region'){ M[i].type=busTypeOf(M[i].region,M[i].type,S.db); renderManual(); return; }
   store.set('manual',M); computeManual();
 });
