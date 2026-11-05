@@ -247,7 +247,7 @@ a{color:var(--pri)}
       </ol>
       <textarea id="workerCode" rows="8" readonly spellcheck="false"></textarea>
       <div class="row" style="margin-top:6px"><button class="btn sm" id="copyWorker">코드 복사</button><span id="copyMsg" class="small muted"></span></div>
-      <p class="muted small" style="margin:6px 0 0">키는 Cloudflare에만 저장돼서 사이트를 공개해도 노출되지 않아요. Worker는 내 사이트에서 온 요청만 받아요.</p>
+      <p class="muted small" style="margin:6px 0 0">키는 Cloudflare에만 저장돼서 사이트를 공개해도 노출되지 않아요. Worker는 내 사이트에서 온 요청만 받고, 카카오 응답을 저장하지 않고 그대로 전달만 해요. Cloudflare의 <b>Workers 로그</b>는 꺼두는 걸 권해요(요청 주소에 위치 좌표가 기록돼요).</p>
     </details>
     <details style="margin-top:8px">
       <summary>카카오 키·한도 안내</summary>
@@ -838,7 +838,7 @@ function bumpUsage(kind){ const u=usage(); u[kind]=(u[kind]||0)+1; store.set('us
 function renderUsage(){
   const u=usage(); const t=`오늘 사용: 길찾기 ${u.route.toLocaleString()} / 1,000회 · 장소 검색 ${u.search.toLocaleString()} / 100,000회 (이 브라우저 기준)`;
   const a=$('#usageBox'); if(a) a.textContent=hasKakao()?t:'';
-  const b=$('#usageLine'); if(b) b.textContent=S.proxy?`오늘 길찾기 ${u.route}/1,000회 · 같은 경로는 저장된 결과를 다시 써요`:'';
+  const b=$('#usageLine'); if(b) b.textContent=S.proxy?`오늘 길찾기 ${u.route}/1,000회`:'';
 }
 function hasKakao(){ return !!(S.proxy||S.key); }
 async function kakao(path, params, isRoute){
@@ -870,17 +870,9 @@ const ROUTE_STATUS_MSG={
 };
 function cacheKey(a,b){ return [a.x,a.y,b.x,b.y].map(v=>(+v).toFixed(4)).join(','); }
 async function kakaoRoute(a,b){
-  const ck=cacheKey(a,b);
-  const cache=store.get('rcache',{});
-  const hit=cache[ck];
-  if(hit && Date.now()-hit.t < 6*3600*1000) return Object.assign({},hit.j,{_cached:true});
+  // 카카오 운영정책상 응답은 저장·캐싱하지 않고 매번 실시간으로 부른다
   const j=await kakao('v2/routing/publictraffic',{start_x:a.x,start_y:a.y,end_x:b.x,end_y:b.y,s_name:a.name||'출발',e_name:b.name||'도착'},true);
   if(j.status && j.status!=='OK'){ const er=new Error(ROUTE_STATUS_MSG[j.status]||('경로를 찾지 못했어요 ('+j.status+')')); er.code=j.status; throw er; }
-  // 최근 20개만 저장
-  cache[ck]={t:Date.now(), j};
-  const keys=Object.keys(cache).sort((x,y)=>cache[y].t-cache[x].t);
-  keys.slice(20).forEach(k=>delete cache[k]);
-  store.set('rcache',cache);
   return j;
 }
 
@@ -899,7 +891,7 @@ const P={
   waits: store.get('waits', []),
   legs: null, sel: [], single: null, selIdx:0, depart:null
 };
-function savePlan(){ store.set('points',P.points.map(p=>({name:p.name,x:p.x,y:p.y}))); store.set('modes',P.modes); store.set('waits',P.waits); }
+function savePlan(){ store.set('points',P.points.map(p=>p.src==='kakao'?{name:'',x:null,y:null}:{name:p.name,x:p.x,y:p.y})); store.set('modes',P.modes); store.set('waits',P.waits); }
 function normPlan(){
   while(P.modes.length<P.points.length-1) P.modes.push('auto');
   P.modes.length=P.points.length-1;
@@ -939,7 +931,7 @@ $('#stops').addEventListener('click',async e=>{
   const resBtn=e.target.closest('.results button');
   if(resBtn){
     const it=JSON.parse(resBtn.dataset.p);
-    P.points[i]={name:it.name, x:it.x, y:it.y};
+    P.points[i]={name:it.name, x:it.x, y:it.y, src:it.k};
     renderStops(); drawMap(); return;
   }
   const b=e.target.closest('button[data-a]'); if(!b) return;
@@ -1028,14 +1020,15 @@ async function fetchLeg(a,b,mode,ctx){
     else if(mode==='bus' && d>=4000) throw routeErr('시내버스만으로 가는 경로가 없어요.','NO_BUS_ONLY',true);
     else noMatch=true;
   }
-  return {a,b,alts:routes, landing:(j.properties&&j.properties.landingURL)||null, cached:!!j._cached, noMatch};
+  return {a,b,alts:routes, landing:(j.properties&&j.properties.landingURL)||null, cached:false, noMatch};
 }
 
+const IC_FARE_MEM={};   // 기기에 저장하지 않고 이 페이지를 연 동안만 기억
 function icKey(a,b){ return (a.name||'')+' → '+(b.name||''); }
 function intercityLeg(a,b){
   const km=hav(a,b)*1.2/1000;          // 도로 거리 어림
   const min=Math.round(km/80*60)+10;   // 고속도로 평균 80km/h + 진출입
-  const f=store.get('icfare',{})[icKey(a,b)];
+  const f=IC_FARE_MEM[icKey(a,b)];
   const fare=(f!=null&&f!=='')?+f:null;
   const seg={mode:'ext', kind:'intercity', line:'시외·고속버스', km, min, from:a.name, to:b.name, fare, coords:[[a.y,a.x],[b.y,b.x]]};
   return {a,b,alts:[{info:{totalTime:min,totalWalk:0,transfers:0,payment:fare||0}, segs:[seg]}], landing:null, cached:false, noMatch:false, intercity:true};
@@ -1144,12 +1137,12 @@ function icFareInput(leg,k){
       <a class="btn sm" href="https://www.kobus.co.kr" target="_blank" rel="noopener">고속버스 ↗</a>
       <a class="btn sm" href="https://www.bustago.or.kr" target="_blank" rel="noopener">시외버스 ↗</a>
     </div>
-    <div class="muted small" style="margin-top:4px">카카오는 도시 간 버스를 알려주지 않아서 시간(약 ${o.info.totalTime}분)은 거리로 어림했어요. 요금을 넣으면 합계에 더해지고 기억돼요.</div>`;
+    <div class="muted small" style="margin-top:4px">카카오는 도시 간 버스를 알려주지 않아서 시간(약 ${o.info.totalTime}분)은 거리로 어림했어요. 요금을 넣으면 합계에 더해져요.</div>`;
 }
 function renderRoute(){
   const out=$('#rOut'); if(!P.legs) return;
   const sortKey=$('#rSort').value; const age=userAge();
-  const cachedNote=P.legs.some(l=>l.cached)?'<span class="muted small">· 저장된 결과 사용</span>':'';
+  const cachedNote='';
   // 구간이 하나면: 여러 후보 경로를 나열
   if(P.legs.length===1 && !P.legs[0].intercity){
     const leg=P.legs[0];
@@ -1225,7 +1218,7 @@ $('#rOut').addEventListener('change',e=>{
     const k=+e.target.dataset.icfare, v=e.target.value;
     const fare=v===''?null:Math.max(0,+v||0);
     const leg=P.legs[k];
-    const all=store.get('icfare',{}); if(fare==null) delete all[icKey(leg.a,leg.b)]; else all[icKey(leg.a,leg.b)]=fare; store.set('icfare',all);
+    if(fare==null) delete IC_FARE_MEM[icKey(leg.a,leg.b)]; else IC_FARE_MEM[icKey(leg.a,leg.b)]=fare;
     const alt=leg.alts[0]; alt.segs[0].fare=fare; alt.info.payment=fare||0;
     renderRoute();
   }
@@ -1242,19 +1235,21 @@ function loadManual(segs){
     if(s.mode==='walk'){ pend+=+s.min||0; return; }
     const w=(s.wait!=null?+s.wait:(M.length?+S.wait||0:0))+(M.length?pend:0);
     if(s.mode!=='bus'&&s.mode!=='subway'){
-      M.push({mode:'ext', kind:s.kind||'other', line:s.line||'', fare:s.fare!=null?s.fare:'', km:+(+s.km||0).toFixed(1), min:+s.min||0, wait:M.length?w:0, from:s.from||'', to:s.to||''});
+      M.push({src:'kakao', mode:'ext', kind:s.kind||'other', line:s.line||'', fare:s.fare!=null?s.fare:'', km:+(+s.km||0).toFixed(1), min:+s.min||0, wait:M.length?w:0, from:s.from||'', to:s.to||''});
       pend=0; return;
     }
-    M.push({mode:s.mode, region:s.region, type:s.type||'', km:+(+s.km||0).toFixed(1), min:+s.min||0, wait:M.length?w:0, line:s.line||'', from:s.from||'', to:s.to||''});
+    M.push({src:'kakao', mode:s.mode, region:s.region, type:s.type||'', km:+(+s.km||0).toFixed(1), min:+s.min||0, wait:M.length?w:0, line:s.line||'', from:s.from||'', to:s.to||''});
     pend=0;
   });
   $('#mDepart').value=P.depart!=null?String(Math.floor(P.depart/60)%24).padStart(2,'0')+':'+String(P.depart%60).padStart(2,'0'):nowHHMM();
   renderManual();
 }
+function saveManual(){ store.set('manual', M.filter(r=>r.src!=='kakao')); }
 function renderManual(){
-  store.set('manual',M);
+  saveManual();
   if(!M.length){ $('#mRows').innerHTML='<p class="muted" style="text-align:center;padding:16px 0 4px">아래 버튼으로 탄 순서대로 구간을 추가하세요.</p>'; $('#mOut').innerHTML=''; return; }
-  $('#mRows').innerHTML=M.map((r,i)=> r.mode==='ext' ? `<div class="mrow" data-i="${i}">
+  const kakaoNote = M.some(r=>r.src==='kakao') ? '<p class="muted small" style="margin:8px 0 0">길찾기에서 가져온 구간은 카카오 이용정책상 기기에 저장하지 않아서, 새로고침하면 사라져요.</p>' : '';
+  $('#mRows').innerHTML=kakaoNote+M.map((r,i)=> r.mode==='ext' ? `<div class="mrow" data-i="${i}">
     <div class="num"><span>${i+1}. 🚍 시외·고속 등 (환승 안 됨)</span><span><button class="btn sm ghost" data-a="up" ${i===0?'disabled':''}>▲</button><button class="btn sm ghost" data-a="del">삭제</button></span></div>
     <label class="f c3">노선·이름<input data-k="line" value="${esc(r.line)}" placeholder="예: 8366, 고속버스"></label>
     <label class="f c3">요금(원, 성인)<input type="number" step="100" min="0" data-k="fare" value="${r.fare}" placeholder="승차권 요금"></label>
@@ -1301,7 +1296,7 @@ $('#mRows').addEventListener('change',e=>{
   const i=+el.closest('.mrow').dataset.i;
   M[i][k]= ['km','min','wait'].includes(k) ? Math.max(0,+el.value||0) : k==='fare' ? (el.value===''?'':Math.max(0,+el.value||0)) : el.value;
   if(k==='region'){ M[i].type=busTypeOf(M[i].region,M[i].type,S.db); renderManual(); return; }
-  store.set('manual',M); computeManual();
+  saveManual(); computeManual();
 });
 
 /* ---------- 요금표 ---------- */
@@ -1345,7 +1340,7 @@ $('#tReset').onclick=()=>{ if(!confirm('모든 지역의 요금을 기본값으�
 /* ---------- 설정 ---------- */
 $('#apiKey').value=S.key;
 $('#apiKey').addEventListener('change',e=>{ S.key=e.target.value.trim(); store.set('kkey',S.key); renderKeyWarn(); renderUsage(); });
-const WORKER_TEMPLATE="// 카카오 API 중계 서버 (Cloudflare Worker)\n// - 카카오 대중교통 길찾기는 브라우저에서 직접 부를 수 없어서(CORS) 이 Worker가 대신 호출합니다.\n// - REST API 키는 Worker의 비밀 변수(KAKAO_REST_KEY)에만 저장되고, 사이트에는 노출되지 않습니다.\n\n// ▼ 내 사이트 주소로 바꾸세요 (https://아이디.github.io 처럼, 끝에 / 없이)\nconst ALLOWED_ORIGINS = ['https://YOUR_ID.github.io'];\n\n// 중계를 허용할 카카오 API 경로\nconst ALLOWED_PATHS = ['/v2/routing/publictraffic', '/v2/local/search/keyword.json'];\n\nexport default {\n  async fetch(request, env) {\n    const origin = request.headers.get('Origin') || '';\n    const allowed = ALLOWED_ORIGINS.includes(origin);\n    const cors = {\n      'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_ORIGINS[0],\n      'Access-Control-Allow-Methods': 'GET, OPTIONS',\n      'Access-Control-Allow-Headers': 'Content-Type',\n      'Vary': 'Origin'\n    };\n    const json = (obj, status) => new Response(JSON.stringify(obj), {\n      status, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' }\n    });\n\n    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });\n    if (request.method !== 'GET') return json({ message: 'GET만 허용됩니다.' }, 405);\n    if (!allowed) return json({ message: '허용되지 않은 사이트에서 온 요청이에요. Worker 코드의 ALLOWED_ORIGINS를 확인하세요.' }, 403);\n    if (!env.KAKAO_REST_KEY) return json({ message: 'Worker에 KAKAO_REST_KEY 비밀 변수가 없어요.' }, 500);\n\n    const url = new URL(request.url);\n    if (!ALLOWED_PATHS.includes(url.pathname)) return json({ message: '허용되지 않은 경로예요.' }, 404);\n\n    const res = await fetch('https://dapi.kakao.com' + url.pathname + url.search, {\n      headers: { Authorization: 'KakaoAK ' + env.KAKAO_REST_KEY }\n    });\n    return new Response(await res.text(), {\n      status: res.status,\n      headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' }\n    });\n  }\n};\n";
+const WORKER_TEMPLATE="// 카카오 API 중계 서버 (Cloudflare Worker)\n// - 카카오 대중교통 길찾기는 브라우저에서 직접 부를 수 없어서(CORS) 이 Worker가 대신 호출합니다.\n// - REST API 키는 Worker의 비밀 변수(KAKAO_REST_KEY)에만 저장되고, 사이트에는 노출되지 않습니다.\n// - 카카오 이용정책(응답 저장·캐싱 금지)에 맞춰 응답을 어디에도 저장·캐시하지 않고 그대로 전달만 합니다.\n\n// ▼ 내 사이트 주소로 바꾸세요 (https://아이디.github.io 처럼, 끝에 / 없이)\nconst ALLOWED_ORIGINS = ['https://YOUR_ID.github.io'];\n\n// 중계를 허용할 카카오 API 경로\nconst ALLOWED_PATHS = ['/v2/routing/publictraffic', '/v2/local/search/keyword.json'];\n\nexport default {\n  async fetch(request, env) {\n    const origin = request.headers.get('Origin') || '';\n    const allowed = ALLOWED_ORIGINS.includes(origin);\n    const cors = {\n      'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_ORIGINS[0],\n      'Access-Control-Allow-Methods': 'GET, OPTIONS',\n      'Access-Control-Allow-Headers': 'Content-Type',\n      'Vary': 'Origin',\n      'Cache-Control': 'no-store'\n    };\n    const json = (obj, status) => new Response(JSON.stringify(obj), {\n      status, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' }\n    });\n\n    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });\n    if (request.method !== 'GET') return json({ message: 'GET만 허용됩니다.' }, 405);\n    if (!allowed) return json({ message: '허용되지 않은 사이트에서 온 요청이에요. Worker 코드의 ALLOWED_ORIGINS를 확인하세요.' }, 403);\n    if (!env.KAKAO_REST_KEY) return json({ message: 'Worker에 KAKAO_REST_KEY 비밀 변수가 없어요.' }, 500);\n\n    const url = new URL(request.url);\n    if (!ALLOWED_PATHS.includes(url.pathname)) return json({ message: '허용되지 않은 경로예요.' }, 404);\n\n    const res = await fetch('https://dapi.kakao.com' + url.pathname + url.search, {\n      headers: { Authorization: 'KakaoAK ' + env.KAKAO_REST_KEY },\n      cache: 'no-store'   // Cloudflare 캐시에 남기지 않음\n    });\n    return new Response(await res.text(), {\n      status: res.status,\n      headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' }\n    });\n  }\n};\n";
 function workerCode(){
   const o=/^https?:/.test(location.origin)?location.origin:'https://YOUR_ID.github.io';
   return WORKER_TEMPLATE.replace("['https://YOUR_ID.github.io']", JSON.stringify([o]).replace(/"/g,"'"));
@@ -1392,6 +1387,12 @@ function rerenderAll(){ if(P.legs) renderRoute(); computeManual(); }
 /* ---------- 시작 ---------- */
 $('#rDepart').value=nowHHMM();
 $('#mDepart').value=nowHHMM();
+if(!store.get('policyV1',false)){
+  ['rcache','icfare','points','manual'].forEach(k=>store.del(k));
+  store.set('policyV1',true);
+  if(P.points.some(p=>p.y!=null)){ P.points=[{name:'',x:null,y:null},{name:'',x:null,y:null}]; P.modes=['auto']; P.waits=[]; }
+  M=[];
+}
 refreshAge(); renderKeyWarn(); renderUsage(); renderStops(); renderManual(); drawMap();
 </script>
 </body>
