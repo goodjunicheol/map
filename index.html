@@ -290,7 +290,7 @@ a{color:var(--pri)}
    조사 기준일 2026-11-05
 ---------------------------------------------------------------- */
 const FARE_DB_DEFAULT = {
-  version: '2026-11-05',
+  version: '2026-11-06e',
   regions: {
     seoul: { name:'서울', group:'capital', model:'capital', window:30, nightWindow:60, maxTransfers:4,
       seniorSubwayFree:65, seniorBusFree:null,
@@ -298,11 +298,11 @@ const FARE_DB_DEFAULT = {
         trunk:{label:'간선·지선', f:[1500,900,550]},
         circular:{label:'순환·차등', f:[1400,800,500]},
         village:{label:'마을버스', f:[1200,600,400]},
-        wide:{label:'광역(빨간버스)', f:[3000,1700,1500], dist:30, est:true},
-        night:{label:'심야(N버스)', f:[2500,1600,1400]}
+        wide:{label:'광역(빨간버스)', f:[3000,1700,1500], tr:30, est:true},
+        night:{label:'심야(N버스)', f:[2500,1600,1400], tr:30}
       },
       subway:{label:'수도권 전철', f:[1550,900,550]},
-      note:'수도권 통합환승: 30분 이내(21~07시 60분), 최대 4회 환승. 총 이용거리 10km 초과 시 5km마다 100원(청소년 80·어린이 50), 50km 초과 시 8km마다. 광역버스 포함 시 기본거리 30km. 06:30 이전 첫 승차 조조할인 20%.',
+      note:'수도권 통합환승: 30분 이내(21~07시 60분), 최대 4회 환승. 갈아타면 이용거리를 모두 더해 10km 초과 시 5km마다 100원(청소년 80·어린이 50), 50km 초과분은 8km마다. 광역·심야·좌석버스가 끼면 기본거리 30km. 서울 시내버스는 혼자 타면 거리와 상관없이 기본요금, 지하철은 혼자 타도 거리비례. 06:30 이전 첫 승차 조조할인 20%.',
       src:'서울시 교통정책과, 서울시 버스정책과(2023.8 조정), 서울교통공사(2025.6.28 조정)'
     },
     gyeonggi: { name:'경기', group:'capital', model:'capital', window:30, nightWindow:60, maxTransfers:4,
@@ -310,13 +310,13 @@ const FARE_DB_DEFAULT = {
       bus:{
         general:{label:'일반형 시내버스', f:[1650,1160,830]},
         village:{label:'마을버스', f:[1650,1160,830], est:true},
-        seat:{label:'좌석형', f:[2650,1860,1330], dist:10},
-        express:{label:'직행좌석(광역)', f:[3200,2300,1600], dist:30},
-        circ:{label:'경기순환', f:[3450,2420,1730], dist:30},
-        mbus:{label:'광역급행 M버스', f:[3200,2300,1600], dist:30}
+        seat:{label:'좌석형', f:[2650,1860,1330], tr:30},
+        express:{label:'직행좌석(광역)', f:[3200,2300,1600], tr:30},
+        circ:{label:'경기순환', f:[3450,2420,1730], tr:30, solo:{base:30,cap:700}},
+        mbus:{label:'광역급행 M버스', f:[3200,2300,1600], tr:30, solo:{base:30,cap:700}}
       },
       subway:{label:'수도권 전철', f:[1550,900,550]},
-      note:'2025.10.25 요금 조정 반영. 마을버스 요금은 시·군마다 다를 수 있습니다.',
+      note:'2025.10.25 요금 조정 반영. 일반·좌석·직행좌석은 혼자 타면 기본요금만, 갈아타면 거리비례(좌석·직행좌석 포함 시 기본 30km). 경기순환·M버스는 혼자 타도 30km 초과 5km마다 100원(최대 700원). 마을버스 요금은 시·군마다 다를 수 있습니다.',
       src:'경기도 보도자료(2025.10.22), 수원시(2025.10)'
     },
     incheon: { name:'인천', group:'capital', model:'capital', window:30, nightWindow:60, maxTransfers:4,
@@ -324,14 +324,14 @@ const FARE_DB_DEFAULT = {
       bus:{
         trunk:{label:'간선형', f:[1500,1050,600]},
         branch:{label:'지선형', f:[1200,850,500]},
-        seat:{label:'좌석(타시도)', f:[1550,1100,650], dist:10},
-        wide:{label:'광역(직행좌석)', f:[3000,1650,1200], dist:30},
-        mbus:{label:'광역급행 M버스', f:[3200,2300,1600], dist:30},
-        brt:{label:'BRT(7700)', f:[2600,1600,1200], dist:30},
+        seat:{label:'좌석(타시도·공항)', f:[1550,1100,650], tr:30, solo:{base:10,cap:700}},
+        wide:{label:'광역(직행좌석)', f:[3000,1650,1200], tr:30},
+        mbus:{label:'광역급행 M버스', f:[3200,2300,1600], tr:30, solo:{base:30,cap:700}},
+        brt:{label:'BRT(7700)', f:[2600,1600,1200], tr:30, est:true},
         night:{label:'심야(N)', f:[1900,1350,800]}
       },
       subway:{label:'수도권 전철', f:[1550,900,550]},
-      note:'인천시 대중교통요금표(2025.12.31 기준).',
+      note:'인천시 대중교통요금표(2025.12.31 기준). 간선·지선·광역은 혼자 타면 기본요금만. 좌석(타시도·공항)은 10km 초과 5km마다 100원(최대 700원), M버스는 30km 초과 5km마다 100원(최대 700원).',
       src:'인천광역시 공공요금안내'
     },
     busan: { name:'부산·김해·양산', group:'busan', model:'max', window:30, maxTransfers:2,
@@ -359,8 +359,9 @@ const FARE_DB_DEFAULT = {
     daejeon: { name:'대전', group:'daejeon', model:'max', window:30, maxTransfers:3,
       seniorSubwayFree:65, seniorBusFree:null,
       bus:{ general:{label:'시내버스', f:[1500,750,350]} },
+      outside:{perKm:60, ratio:[1,0.8,0.5], est:true},
       subway:{label:'대전 도시철도', f:[1550,880,550], zone:{km:10, f:[1650,960,600]}},
-      note:'버스→도시철도 환승 시 일반 50원 추가(차액), 청소년·어린이 무료 환승. 30분 이내 3회.',
+      note:'버스→도시철도 환승 시 일반 50원 추가(차액), 청소년·어린이 무료 환승. 30분 이내 3회. 대전 밖으로 나가는 노선(1002, 34 등 시계외)은 대전 경계 밖 거리 1km마다 60원 추가(청소년·어린이도 붙어요. 성인의 80%·50%로 추정). B1은 구간 요금.',
       src:'대전광역시 주요공공요금'
     },
     gwangju: { name:'광주', group:'gwangju', model:'max', window:30, maxTransfers:2, transferEst:true,
@@ -390,8 +391,9 @@ const FARE_DB_DEFAULT = {
     },
     jeju: { name:'제주', group:'jeju', model:'max', window:40, maxTransfers:1, transferEst:true,
       seniorSubwayFree:65, seniorBusFree:70, subwayRef:'seoul',
-      bus:{ general:{label:'간선·지선', f:[1500,1200,600], est:true} },
-      note:'70세 이상 교통복지카드 무료. 요금은 추정값이니 확인하세요.',
+      bus:{ general:{label:'간선·지선', f:[1500,1200,600], est:true},
+            express:{label:'급행', f:[2000,1600,1000], dist:{base:20, step:5, add:200, cap:1000}, est:true} },
+      note:'70세 이상 교통복지카드 무료. 급행버스는 20km까지 2,000원, 이후 5km마다 200원(최대 3,000원). 공항리무진은 거리에 따라 1,300~5,500원이라 시외버스처럼 따로 계산해요. 청소년·어린이 요금은 추정값이에요.',
       src:'제주도 요금 인상 추진 보도(2025)'
     },
     other: { name:'기타 시·군', group:'other', model:'max', window:30, maxTransfers:1, transferEst:true,
@@ -404,6 +406,52 @@ const FARE_DB_DEFAULT = {
       src:'전국 시내버스 요금 보도 종합'
     }
   }
+};
+
+/* 노선별 특수 요금 (버스 번호로 찾음) */
+FARE_DB_DEFAULT.routes = {
+  djB1: { no:'B1', touch:['daejeon','sejong'], label:'BRT B1 (대전·세종·오송)', group:'daejeon', region:'daejeon',
+          same:[2000,1100,700], cross:[2300,1400,850], osong:[2600,1700,1000], est:true,
+          note:'일반: 대전 안·세종 안 2,000원, 대전↔세종 2,300원, 대전↔오송 2,600원(2024.2.29~). 청소년(1,100원)·어린이(700원)도 구간 요금이 붙어요. 구간 추가분은 세종 BRT 방식(청소년은 성인과 같게, 어린이는 절반)으로 추정했어요.' },
+  bs2000: { no:'2000', touch:['busan'], label:'2000번 부산↔거제 직행좌석', region:'busan', noTransfer:true,
+          inside:[2100,1350,0], outside:[5700,4230,1800], est:true,
+          note:'부산 안 2,100원, 부산 시계 밖(거제)까지 5,700원(카드, 2023.10.6~). 환승할인 없음. 청소년·어린이도 시계외 요금이 붙어요(성인 추가분 3,600원의 80%·50%로 추정).' }
+};
+/* 대전 경계(대략) — 시계외 거리 계산용 */
+const DAEJEON_POLY=[[36.497,127.415],[36.470,127.470],[36.445,127.520],[36.400,127.560],[36.330,127.555],[36.270,127.540],[36.200,127.480],[36.185,127.420],[36.205,127.360],[36.215,127.300],[36.270,127.255],[36.330,127.265],[36.380,127.290],[36.430,127.320],[36.455,127.360],[36.480,127.390]];
+function inPoly(lat,lng,poly){
+  let ins=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const [yi,xi]=poly[i],[yj,xj]=poly[j];
+    if(((yi>lat)!==(yj>lat)) && (lng < (xj-xi)*(lat-yi)/(yj-yi)+xi)) ins=!ins;
+  }
+  return ins;
+}
+function hav2(a,b){ const R=6371000,t=Math.PI/180; const dLa=(b[0]-a[0])*t, dLo=(b[1]-a[1])*t; const x=Math.sin(dLa/2)**2+Math.cos(a[0]*t)*Math.cos(b[0]*t)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+/* 경로 좌표 중 대전 밖을 달린 거리(km). 카카오 구간 거리에 맞춰 비율 보정 */
+function outsideKm(pts, totalKm, poly){
+  if(!pts || pts.length<2) return 0;
+  let all=0, out=0;
+  for(let i=1;i<pts.length;i++){
+    const d=hav2(pts[i-1],pts[i]); all+=d;
+    const m=[(pts[i-1][0]+pts[i][0])/2,(pts[i-1][1]+pts[i][1])/2];
+    if(!inPoly(m[0],m[1],poly)) out+=d;
+  }
+  return all>0 ? (out/all)*totalKm : 0;
+}
+
+/* 지하철 중 거리·구간 요금이 따로 있는 노선 (노선 이름으로 찾음) */
+FARE_DB_DEFAULT.rails = {
+  bgl: { match:'김해', label:'부산김해경전철', group:'busan', zones:{
+           o1:['가야대','장신대','연지공원','박물관','수로왕릉','봉황','부원','김해시청','인제대'],
+           o2:['대저','등구','덕두','공항','서부산유통지구','괘법르네시떼','사상'] },
+         f1:[1600,1100,750], f2:[1800,1250,850], xferFee:[500,260,0], seniorPays:true, est:true,
+         note:'구간제(김해 외곽↔중앙 1구간, 김해 외곽↔부산 쪽 외곽 2구간). 부산 도시철도·버스와 갈아타면 환승요금 500원(청소년 260원)+차액. 경로 무임 없음.' },
+  donghae: { match:'동해선', label:'동해선 광역전철', group:'busan', base:[1600,1050,800], baseKm:10, step:{km:10, f:[200,160,100]}, crossFee:[200,160,100], est:true,
+         note:'10km까지 1,600원, 이후 10km마다 200원. 월내역을 지나 부산↔울산을 오가면 시계외 200원 추가(10km 이하는 제외). 청소년·어린이 요금은 추정값.' },
+  daegyeong: { match:'대경선', label:'대경선 광역철도', group:'daegu', base:[1500,1200,750], baseKm:10, step:{km:5, f:[100,80,50]}, crossFee:[200,160,100],
+         gbStations:['구미','사곡','왜관','경산','신동','연화'], est:true,
+         note:'10km까지 1,500원, 이후 5km마다 100원. 대구↔경북 경계를 넘으면 200원(두 번 넘어도 한 번만). 구미~경산 2,800원. 대구권 광역환승 적용. 청소년·어린이 요금은 추정값.' }
 };
 
 const REGION_BOXES = [
@@ -453,26 +501,97 @@ function segFare(seg, age, db){
   const r=db.regions[seg.region]||db.regions.other;
   if(cat==='infant') return {free:true, fare:0, reason:'만 6세 미만 무료(보호자 동반)'};
   if(seg.mode==='subway'){
+    const rails=db.rails||{};
+    const rk=Object.keys(rails).find(k=>String(seg.line||'').includes(rails[k].match));
+    if(rk){
+      const R=rails[rk], km=+seg.km||0;
+      if(age>=65 && !R.seniorPays && r.seniorSubwayFree && age>=r.seniorSubwayFree) return {free:true, fare:0, reason:'경로 무임'};
+      let f, lab=R.label;
+      if(R.zones){
+        const zoneOf=n=>{ n=String(n||''); if(R.zones.o1.some(z=>n.includes(z))) return 'o1'; if(R.zones.o2.some(z=>n.includes(z))) return 'o2'; return 'c'; };
+        const two = seg.from && seg.to ? (new Set([zoneOf(seg.from),zoneOf(seg.to)]).size===2 && zoneOf(seg.from)!=='c' && zoneOf(seg.to)!=='c') : km>15;
+        f=(two?R.f2:R.f1)[idx]; lab+=two?' 2구간':' 1구간';
+      }else{
+        const st = km>R.baseKm ? Math.ceil((km-R.baseKm)/R.step.km - 1e-9) : 0;
+        f=R.base[idx]+st*R.step.f[idx];
+        let cross=false;
+        if(R.gbStations){
+          const gb=n=>R.gbStations.some(z=>String(n||'').includes(z));
+          const fG=gb(seg.from), tG=gb(seg.to);
+          cross = (fG!==tG) || (fG && tG && (String(seg.from).includes('경산')!==String(seg.to).includes('경산')));
+          if(!seg.from && !seg.to) cross = km>20;
+        }else cross = !!seg.crossCity && km>10;
+        if(R.crossFee && cross){ f+=R.crossFee[idx]; lab+=' +경계 200원'; }
+        if(st>0) lab+=` (${km.toFixed(1)}km, 기본 ${R.baseKm}km + ${st}×${R.step.f[idx]}원)`;
+      }
+      if(f===0) return {free:true, fare:0, reason:CAT_LABEL[cat]+' 무료'};
+      return {fare:f, tr:10, solo:null, label:lab, est:!!R.est, isSubway:true, rail:rk, xferFee:R.xferFee||null, group:R.group, line:seg.line||''};
+    }
     const sr=db.regions[subwayRegion(seg.region,db)];
     if(age>=65 && r.seniorSubwayFree && age>=r.seniorSubwayFree) return {free:true, fare:0, reason:'경로 무임'};
     let f=sr.subway.f[idx];
     let zone2=false;
     if(sr.subway.zone && (+seg.km||0)>sr.subway.zone.km){ f=sr.subway.zone.f[idx]; zone2=true; }
+    const zl = sr.subway.zone ? (zone2?` 2구간 (${(+seg.km||0).toFixed(1)}km, ${sr.subway.zone.km}km 초과)`:` 1구간 (${sr.subway.zone.km}km 이내)`) : '';
     if(f===0) return {free:true, fare:0, reason:CAT_LABEL[cat]+' 무료'};
-    return {fare:f, distType:false, baseKm:10, label:sr.subway.label+(zone2?' 2구간':''), est:!!sr.subway.est, isSubway:true};
+    return {fare:f, tr:10, solo:(sr.model==='capital'?{base:10,cap:null}:null), label:sr.subway.label+zl, est:!!sr.subway.est, isSubway:true, rail:'metro:'+subwayRegion(seg.region,db), line:seg.line||''};
+  }
+  // 노선별 특수 요금 (대전 B1, 부산↔거제 2000번 등)
+  const routes=db.routes||{};
+  const rid=Object.keys(routes).find(k=>{ const R=routes[k]; return String(seg.no||seg.line||'').trim().toUpperCase()===R.no && R.touch.some(t=>t===seg.region||t===seg.endRegion); });
+  if(rid){
+    const R=routes[rid]; const rr=db.regions[R.region]||r;
+    if(age>=65 && rr.seniorBusFree && age>=rr.seniorBusFree) return {free:true, fare:0, reason:'경로 무료(전용카드)'};
+    let arr, lab=R.label;
+    if(R.same){
+      const ends=[seg.region, seg.endRegion||seg.region];
+      const nearOsong=q=>q && hav2(q,[36.6202,127.3269])<4000;
+      const cs=seg.coords||[];
+      const osong = ends.some(e=>e!=='daejeon'&&e!=='sejong') || /오송/.test((seg.from||'')+(seg.to||'')) || nearOsong(cs[0]) || nearOsong(cs[cs.length-1]);
+      arr = osong ? R.osong : (ends[0]!==ends[1] ? R.cross : R.same);
+      lab += osong?' · 오송 구간':(ends[0]!==ends[1]?' · 대전↔세종':' · 같은 시 안');
+    }else{
+      const inside = seg.region===R.touch[0] && (seg.endRegion||seg.region)===R.touch[0];
+      arr = inside ? R.inside : R.outside; lab += inside?' · 시내':' · 시계외';
+    }
+    const f=arr[idx];
+    if(f===0) return {free:true, fare:0, reason:CAT_LABEL[cat]+' 무료'};
+    return {fare:f, tr:10, solo:null, label:lab, est:!!R.est, group:R.group||rr.group, region:R.region, noTransfer:!!R.noTransfer};
+  }
+  // 대전 시계외: 대전 경계를 넘나드는 노선은 경계 밖 거리만큼 추가
+  const dj=db.regions.daejeon;
+  if(dj && dj.outside && (seg.startDJ!==seg.endDJ || (seg.startDJ && seg.djOutKm>1)) && (+seg.djOutKm||0)>0.5){
+    const t=dj.bus.general;
+    if(age>=65 && dj.seniorBusFree && age>=dj.seniorBusFree && seg.startDJ) return {free:true, fare:0, reason:'경로 무료(전용카드)'};
+    const base=t.f[idx];
+    if(base===0) return {free:true, fare:0, reason:CAT_LABEL[cat]+' 무료'};
+    const ok=Math.ceil(+seg.djOutKm - 1e-9);
+    const rt=(dj.outside.ratio||[1,0.8,0.5])[idx];
+    const add=Math.round(ok*dj.outside.perKm*rt/10)*10;
+    return {fare:base+add, tr:10, solo:null, label:`대전 시내버스 · 시계외 ${ok}km × ${Math.round(dj.outside.perKm*rt)}원 = +${add}원`, est:true, group:dj.group, region:'daejeon'};
   }
   const tk=busTypeOf(seg.region, seg.type, db);
   const t=r.bus[tk];
   if(age>=65 && r.seniorBusFree && age>=r.seniorBusFree) return {free:true, fare:0, reason:'경로 무료(전용카드)'};
-  const f=t.f[idx];
+  let f=t.f[idx], lab=t.label;
   if(f===0) return {free:true, fare:0, reason:CAT_LABEL[cat]+' 무료'};
-  return {fare:f, distType:!!t.dist, baseKm:t.dist||10, label:t.label, est:!!t.est};
+  if(t.dist){
+    const km=+seg.km||0, D=t.dist;
+    const st = km>D.base ? Math.ceil((km-D.base)/D.step - 1e-9) : 0;
+    if(st>0){
+      const ratio=t.f[idx]/t.f[0];
+      const add=Math.round(Math.min(D.cap, st*D.add)*ratio/10)*10;
+      f+=add; lab+=` (${km.toFixed(1)}km, 기본 ${D.base}km + ${add}원)`;
+    }
+  }
+  return {fare:f, tr:t.tr||10, solo:t.solo||null, label:lab, est:!!t.est, night:(tk==='night')};
 }
 
 function distSteps(km, baseKm){
   if(km<=baseKm+1e-9) return 0;
-  const t1End = baseKm>=30 ? 60 : 50;
-  let s=Math.ceil((Math.min(km,t1End)-baseKm)/5 - 1e-9);
+  // 기본거리 초과 ~ 50km: 5km마다, 50km 초과분: 8km마다 (기본거리가 50km 이상이면 처음부터 8km)
+  const t1End = Math.max(50, baseKm);
+  let s = km>baseKm ? Math.ceil((Math.min(km,t1End)-baseKm)/5 - 1e-9) : 0;
   if(km>t1End+1e-9) s+=Math.ceil((km-t1End)/8 - 1e-9);
   return s;
 }
@@ -487,11 +606,37 @@ function segName(s){
   return s.line||s.mode;
 }
 
+function railKey(s, db){
+  const rails=db.rails||{};
+  const rk=Object.keys(rails).find(k=>String(s.line||'').includes(rails[k].match));
+  return rk || ('metro:'+subwayRegion(s.region,db));
+}
+/* 같은 지하철 시스템 안에서 노선만 바꾼 건 환승이 아니라 한 번 탄 것으로 본다 (거리·구간도 합산) */
+function mergeSubway(segs, db){
+  const out=[];
+  for(let i=0;i<segs.length;i++){
+    const s=segs[i];
+    if(s.mode==='subway'){
+      // 직전 지하철과 사이에 짧은 도보(10분 이하)만 있고 같은 시스템이면 합친다
+      let j=out.length-1, walkMin=0;
+      while(j>=0 && out[j].mode==='walk'){ walkMin+=+out[j].min||0; j--; }
+      const p=out[j];
+      if(p && p.mode==='subway' && walkMin<=10 && !(s.wait>0) && railKey(p,db)===railKey(s,db)){
+        const m=Object.assign({},p,{km:(+p.km||0)+(+s.km||0), min:(+p.min||0)+walkMin+(+s.min||0), to:s.to,
+          line: p.line===s.line ? p.line : (p.line+'→'+s.line), merged:true});
+        out.splice(j); out.push(m); continue;
+      }
+    }
+    out.push(s);
+  }
+  return out;
+}
 /* 전체 이동의 요금 계산 */
 function computeTrip(segs, age, opts){
   opts=opts||{};
   const db=opts.db, depart=(opts.depart!=null?opts.depart:8*60), defWait=(opts.defaultWait!=null?opts.defaultWait:5);
   const cat=ageCat(age), idx=catIdx(cat);
+  segs=mergeSubway(segs, db);
   let clock=depart, pendingGap=0, first=true, cur=null;
   const chains=[];
   for(const s of segs){
@@ -506,31 +651,33 @@ function computeTrip(segs, age, opts){
     const wait = (s.wait!=null && s.wait!=='') ? +s.wait : (first?0:defWait);
     const gap = pendingGap + wait;
     clock += wait;
-    const r=db.regions[s.region]||db.regions.other;
     const f=segFare(s,age,db);
+    const r=db.regions[f.region||s.region]||db.regions.other;
+    const grp=f.group||r.group;
     const win=windowFor(r,clock);
-    if(cur && cur.group===r.group && gap<=win && cur.rides.length<(r.maxTransfers+1)){
+    if(cur && !f.noTransfer && !cur.closed && cur.group===grp && gap<=win && cur.rides.length<(r.maxTransfers+1)){
       cur.rides.push({seg:s,f,gap});
     }else{
       let why=null;
-      if(cur){ why = cur.group!==r.group ? '요금 권역이 달라 새로 계산' : gap>win ? `환승 인정시간 초과(${gap}분 > ${win}분)` : `환승 횟수 초과(최대 ${r.maxTransfers}회)`; }
-      cur={group:r.group, model:r.model, region:s.region, rides:[{seg:s,f,gap}], startClock:clock, breakReason:why};
+      if(cur){ why = (f.noTransfer||cur.closed) ? '환승할인이 안 되는 노선이라 따로 결제' : cur.group!==grp ? '요금 권역이 달라 새로 계산' : gap>win ? `환승 인정시간 초과(${gap}분 > ${win}분)` : `환승 횟수 초과(최대 ${r.maxTransfers}회)`; }
+      cur={group:grp, model:r.model, region:f.region||s.region, rides:[{seg:s,f,gap}], startClock:clock, breakReason:why, closed:!!f.noTransfer};
       chains.push(cur);
     }
     clock += +s.min||0; pendingGap=0; first=false;
   }
-  let total=0, n=0, est=false;
+  let total=0, n=0, est=false, special=false;
   for(const c of chains){
     if(c.external){ total+=c.total; if(c.known && c.seg.fareEst) est=true; continue; }
     evalChain(c, idx, n===0);
     total+=c.total; n++;
     if(c.rides.some(r=>r.f.est)) est=true;
+    if(c.special) special=true;
     const rr=db.regions[c.region]; if(rr && (rr.transferEst||rr.seniorEst)) est=true;
   }
-  return {age:+age, cat, chains, total, est, hasExternal:chains.some(c=>c.external && !c.known), hasIntercity:chains.some(c=>c.external && c.known)};
+  return {age:+age, cat, chains, total, est, hasExternal:chains.some(c=>c.external && !c.known), hasIntercity:chains.some(c=>c.external && c.known), special};
 }
 function evalChain(c, idx, isFirst){
-  const lines=[]; let running=0;
+  const lines=[]; let running=0, xfer=0;
   const paid=c.rides.filter(r=>!r.f.free);
   c.rides.forEach((r,i)=>{
     const nm=segName(r.seg);
@@ -540,19 +687,35 @@ function evalChain(c, idx, isFirst){
       const d=Math.max(0,r.f.fare-running);
       lines.push({label:nm+' 환승', amt:d, note:d?'기본요금 차액':'무료 환승'});
       running=Math.max(running,r.f.fare);
+      // 부산김해경전철처럼 운영사가 달라 환승요금이 따로 붙는 경우
+      const prev=c.rides[i-1];
+      if(prev && !prev.f.free && (r.f.xferFee||prev.f.xferFee) && r.f.rail!==prev.f.rail){
+        const fee=(r.f.xferFee||prev.f.xferFee)[idx];
+        if(fee>0){ lines.push({label:'경전철 환승요금', amt:fee, note:'운영사가 달라 추가'}); xfer+=fee; }
+      }
     }
   });
-  let total=running;
+  let total=running+xfer;
   if(c.model==='capital' && paid.length){
-    const need = paid.length>1 || paid.some(r=>r.f.distType||r.f.isSubway);
-    if(need){
-      const km=paid.reduce((a,r)=>a+(+r.seg.km||0),0);
-      const baseKm=Math.max(...paid.map(r=>r.f.baseKm||10));
+    const unit=[100,80,50][idx];
+    const km=paid.reduce((a,r)=>a+(+r.seg.km||0),0);
+    if(paid.length>1){
+      // 통합환승: 이용거리 합산, 좌석·광역·심야가 끼면 기본 30km
+      const baseKm=Math.max(...paid.map(r=>r.f.tr||10));
       const st=distSteps(km,baseKm);
-      if(st>0){ const unit=[100,80,50][idx]; lines.push({label:`거리 추가요금 (총 ${km.toFixed(1)}km, 기본 ${baseKm}km)`, amt:st*unit, note:`${st}단계 × ${unit}원`}); total+=st*unit; }
+      if(st>0){ lines.push({label:`거리 추가요금 (갈아탄 거리 합 ${km.toFixed(1)}km, 기본 ${baseKm}km)`, amt:st*unit, note:`${st}단계 × ${unit}원`}); total+=st*unit; }
+    }else if(paid[0].f.solo){
+      // 혼자 탈 때 거리비례가 있는 수단(지하철, 경기순환·M버스, 인천 좌석)
+      const so=paid[0].f.solo;
+      const st=distSteps(km,so.base);
+      let amt=st*unit, note=`${st}단계 × ${unit}원`;
+      if(so.cap!=null && amt>Math.round(so.cap*unit/100)){ amt=Math.round(so.cap*unit/100); note+=` (최대 ${amt}원)`; }
+      if(amt>0){ lines.push({label:`거리 추가요금 (${km.toFixed(1)}km, 기본 ${so.base}km)`, amt, note}); total+=amt; }
     }
+    // 신분당선·GTX·공항철도(영종) 등 별도운임 구간 경고
+    paid.forEach(r=>{ if(r.f.isSubway && /신분당|GTX|공항철도/.test(r.f.line||'')){ c.special=true; } });
     const m=((c.startClock%1440)+1440)%1440;
-    if(isFirst && m>=240 && m<390 && !c.rides[0].f.free){
+    if(isFirst && m>=240 && m<390 && !c.rides[0].f.free && !c.rides[0].f.night && c.region!=='incheon'){
       const d=Math.floor(c.rides[0].f.fare*0.2/10)*10;
       if(d>0){ lines.push({label:'조조할인 (06:30 이전 첫 승차 20%)', amt:-d}); total-=d; }
     }
@@ -615,7 +778,10 @@ function kakaoRouteToSegs(route, db){
     if(t==='WALKING'){ segs.push({mode:'walk', min, m:dist}); continue; }
     if(t==='SUBWAY'){
       const region=y0!=null?detectRegion(y0,x0):'seoul';
-      segs.push({mode:'subway', region, line:(veh[0]&&veh[0].name)||'지하철', km:dist/1000, min, from, to, stops:Math.max(0,stops.length-1), coords:pts, next:stops.length>1?stops[1].name:'', guidance:p.guidance||''});
+      const yl=pts.length?pts[pts.length-1][0]:null, xl=pts.length?pts[pts.length-1][1]:null;
+      const endRegion=yl!=null?detectRegion(yl,xl):region;
+      const crossCity=new Set([region,endRegion]).size===2 && [region,endRegion].includes('ulsan') && [region,endRegion].includes('busan');
+      segs.push({mode:'subway', region, crossCity, line:(veh[0]&&veh[0].name)||'지하철', km:dist/1000, min, from, to, stops:Math.max(0,stops.length-1), coords:pts, next:stops.length>1?stops[1].name:'', guidance:p.guidance||''});
       continue;
     }
     if(t==='BUS'){
@@ -632,7 +798,13 @@ function kakaoRouteToSegs(route, db){
           stops:Math.max(0,stops.length-1), coords:pts, fare:null, ...dirInfo});
         continue;
       }
-      segs.push({mode:'bus', region, type:mapKakaoBusType(region, v.type, v.name, db), busLabel:v.type||'',
+      const yl=pts.length?pts[pts.length-1][0]:null, xl=pts.length?pts[pts.length-1][1]:null;
+      const endRegion=yl!=null?detectRegion(yl,xl):region;
+      const djIn=(q)=>q && inPoly(q[0],q[1],DAEJEON_POLY);
+      const touchDJ = pts.length>1 && (djIn(pts[0]) || djIn(pts[pts.length-1]));
+      const djOutKm = touchDJ ? outsideKm(pts, dist/1000, DAEJEON_POLY) : 0;
+      const startDJ = pts.length && djIn(pts[0]), endDJ = pts.length && djIn(pts[pts.length-1]);
+      segs.push({mode:'bus', region, endRegion, no:v.name!=null?String(v.name).trim():'', djOutKm, startDJ, endDJ, type:mapKakaoBusType(region, v.type, v.name, db), busLabel:v.type||'',
         line:names.slice(0,3).join(', ')+(names.length>3?' 외':'') || '버스', km:dist/1000, min, from, to,
         stops:Math.max(0,stops.length-1), coords:pts, ...dirInfo});
       continue;
@@ -663,7 +835,7 @@ const S={
   wait: store.get('wait',5),
   db: store.get('db',null) || clone(FARE_DB_DEFAULT)
 };
-if(!S.db.regions || !S.db.regions.seoul) S.db=clone(FARE_DB_DEFAULT);
+if(!S.db.regions || !S.db.regions.seoul || (S.db.version||'') < FARE_DB_DEFAULT.version){ S.db=clone(FARE_DB_DEFAULT); store.del('db'); }
 
 function userAge(){
   if(S.birth){
@@ -761,6 +933,7 @@ function fareSummaryHTML(segs, depart, title){
     ${title?`<b>${esc(title)}</b>`:''}
     <div class="total"><span>내 요금 (만 ${trip.age}세 · ${CAT_LABEL[trip.cat]})</span><span class="v">${won(trip.total)}</span></div>
     ${trip.hasExternal?'<div class="hint">시외·고속버스 요금을 아직 몰라서 합계에 빠져 있어요. 그 구간의 승차권 요금 칸에 넣으면 더해져요.</div>':''}
+    ${trip.special?'<div class="hint">신분당선·GTX-A·공항철도(영종 구간)는 별도운임이 더 붙는데 이 계산엔 빠져 있어요. 카카오 표기 요금을 참고하세요.</div>':''}
     ${trip.hasIntercity?'<div class="hint">시외·고속버스 구간은 통합환승이 안 돼서 따로 결제하는 것으로 계산했어요.</div>':''}
     ${trip.est?'<div class="hint">일부 요금·환승 규칙에 추정값이 들어 있어요. 요금표 탭에서 확인하고 고칠 수 있습니다.</div>':''}
     ${renderBreakdown(trip)}
@@ -1160,7 +1333,7 @@ function renderRoute(){
       h+=`<div class="card pcard ${sel?'sel':''}" data-pi="${o._i}">
         <div class="phead">
           <div><div class="ptime">${o.info.totalTime||'?'}분</div><div class="muted small">환승 ${transfersOf(o)}회 · 도보 ${o.info.totalWalk||0}m</div></div>
-          <div class="pfare"><div class="big">${won(o._fare)}</div><div class="muted small">${t.hasExternal?'+ 시외 요금 별도':'카카오 표기 '+won(+o.info.payment||0)}</div></div>
+          <div class="pfare"><div class="big">${won(o._fare)}</div><div class="muted small">${t.hasExternal?'+ 시외 요금 별도':'카카오 성인요금 '+won(+o.info.payment||0)}</div>${(!t.hasExternal && +o.info.payment>0 && computeTrip(o.segs,30,opts(P.depart)).total!==+o.info.payment)?'<div class="small" style="color:var(--warn)">내 계산(성인)과 달라요</div>':''}</div>
         </div>
         <div class="chain">${chainHTML(o.segs)}</div>
         ${sel?ruralHint(o.segs):''}
@@ -1308,13 +1481,22 @@ function renderTable(){
   tDraft=clone(r);
   const row=(label,f,path,est,extra)=>`<tr><td>${esc(label)} ${est?'<span class="badge est">추정</span>':''}${extra?`<div class="muted small">${esc(extra)}</div>`:''}</td>${f.map((v,j)=>`<td class="n"><input type="number" step="10" min="0" data-p="${path}" data-j="${j}" value="${v}"></td>`).join('')}</tr>`;
   let h='<div class="tblwrap ftbl"><table><thead><tr><th>구분</th><th class="n">일반</th><th class="n">청소년</th><th class="n">어린이</th></tr></thead><tbody>';
-  Object.entries(r.bus).forEach(([bk,t])=>{ h+=row('🚌 '+t.label, t.f, 'bus.'+bk, t.est, t.dist?`거리비례 (기본 ${t.dist}km)`:''); });
+  Object.entries(r.bus).forEach(([bk,t])=>{ h+=row('🚌 '+t.label, t.f, 'bus.'+bk, t.est, [t.dist?`${t.dist.base}km 초과 ${t.dist.step}km마다 ${t.dist.add}원 (최대 ${t.dist.cap}원)`:'', t.solo?`혼자 타도 ${t.solo.base}km 초과 거리비례${t.solo.cap?` (최대 ${t.solo.cap}원)`:''}`:'', (r.model==='capital' && t.tr===30)?'갈아타면 기본거리 30km':''].filter(Boolean).join(' · ')); });
   if(r.subway){
     h+=row('🚇 '+r.subway.label+(r.subway.zone?` (~${r.subway.zone.km}km)`:''), r.subway.f, 'subway', r.subway.est, r.model==='capital'?'10km 초과 5km마다 +100/80/50원':'');
     if(r.subway.zone) h+=row(`🚇 ${r.subway.label} (${r.subway.zone.km}km 초과)`, r.subway.zone.f, 'zone', r.subway.est);
   }else{
     h+=`<tr><td colspan="4" class="muted small">🚇 이 지역에 도시철도 요금이 없어 ${esc(S.db.regions[subwayRegion(k,S.db)].name)} 기준을 씁니다.</td></tr>`;
   }
+  Object.values(S.db.routes||{}).filter(R=>R.region===k).forEach(R=>{
+    const v=R.same?`같은 시 ${R.same.join('/')} · 대전↔세종 ${R.cross.join('/')} · 오송 ${R.osong.join('/')}`:`시내 ${R.inside.join('/')} · 시계외 ${R.outside.join('/')}`;
+    h+=`<tr><td>🚌 ${esc(R.label)} ${R.est?'<span class="badge est">추정</span>':''}<div class="muted small">${esc(R.note||'')}</div></td><td colspan="3" class="muted small">${esc(v)}원<br>(일반/청소년/어린이)</td></tr>`;
+  });
+  const rails=Object.values(S.db.rails||{}).filter(R=>R.group===r.group || (k==='ulsan' && R.match==='동해선'));
+  rails.forEach(R=>{
+    const lab=R.zones?`1구간 ${R.f1.join('/')} · 2구간 ${R.f2.join('/')}`:`기본 ${R.base.join('/')} (${R.baseKm}km) + ${R.step.km}km마다 ${R.step.f.join('/')}`;
+    h+=`<tr><td>🚆 ${esc(R.label)} ${R.est?'<span class="badge est">추정</span>':''}<div class="muted small">${esc(R.note||'')}</div></td><td colspan="3" class="muted small">${esc(lab)}원<br>(일반/청소년/어린이)</td></tr>`;
+  });
   h+='</tbody></table></div>';
   h+=`<div class="muted small" style="margin-top:10px">
     <div>• 환승 인정: ${r.window}분${r.nightWindow?` (21~07시 ${r.nightWindow}분)`:''} 이내, 최대 ${r.maxTransfers}회 ${r.transferEst?'<span class="badge est">추정</span>':''}</div>
